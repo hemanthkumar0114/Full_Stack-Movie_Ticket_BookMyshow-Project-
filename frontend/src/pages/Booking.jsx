@@ -1,190 +1,144 @@
-import { useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import Swal from "sweetalert2";
-import SeatSelection from "../Components/SeatSelection";
 
-function Booking() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://corrected-backend.onrender.com/api/v1";
 
-  const [movie, setMovie] = useState(null);
-  const [showtimes, setShowtimes] = useState([]);
-  const [selectedShowtime, setSelectedShowtime] = useState(null);
-
-  // Booking details
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState(""); // Replaced phone with email to match backend
-
-  // Seat selection state
-  const [selectedSeatIds, setSelectedSeatIds] = useState([]);
+function SeatSelection({
+  showtimeId,
+  price,
+  onSeatSelect,
+}) {
+  const [seats, setSeats] = useState([]);
+  const [selectedSeatIds, setSelectedSeatIds] =
+    useState([]);
 
   useEffect(() => {
-    // Fetch movie
-    fetch("http://localhost:8080/api/movies")
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch movies");
+    if (!showtimeId) return;
+
+    fetch(
+      `${BASE_URL}/showtimes/${showtimeId}/seats`
+    )
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error(
+            "Failed to fetch seats"
+          );
+        }
+
         return res.json();
       })
-      .then(data => {
-        if (Array.isArray(data)) {
-          const found = data.find((m) => m.id == id);
-          setMovie(found);
+      .then((data) => {
+        if (
+          data &&
+          Array.isArray(data.seats)
+        ) {
+          setSeats(data.seats);
+        } else {
+          setSeats([]);
         }
+
+        setSelectedSeatIds([]);
+
+        onSeatSelect([]);
       })
-      .catch(err => console.error(err));
+      .catch((err) => {
+        console.error(
+          "Seat fetch error:",
+          err
+        );
+      });
+  }, [showtimeId, onSeatSelect]);
 
-    // Fetch showtimes
-    fetch(`http://localhost:8080/api/movies/${id}/showtimes`)
-      .then(res => {
-        if (!res.ok) throw new Error("Failed to fetch showtimes");
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setShowtimes(data);
-          if (data.length > 0) {
-            setSelectedShowtime(data[0]);
-          }
-        }
-      })
-      .catch(err => console.error(err));
-  }, [id]);
+  const toggleSeat = (seatId) => {
+    let updated;
 
-  if (!movie) {
-    return <h2>Loading...</h2>;
-  }
-
-  // Total calculation
-  const total = selectedShowtime ? (selectedSeatIds.length * selectedShowtime.ticketPrice).toFixed(2) : 0;
-
-  const handleShowtimeChange = (e) => {
-    const stId = parseInt(e.target.value);
-    const st = showtimes.find(s => s.id === stId);
-    setSelectedShowtime(st);
-    setSelectedSeatIds([]); // Reset seats on showtime change
-  };
-
-  // Confirm Booking
-  const confirmBooking = () => {
-    if (!name || !email || !selectedShowtime || selectedSeatIds.length === 0) {
-      Swal.fire("Please fill all details and select seats");
-      return;
+    if (selectedSeatIds.includes(seatId)) {
+      updated = selectedSeatIds.filter(
+        (id) => id !== seatId
+      );
+    } else {
+      updated = [
+        ...selectedSeatIds,
+        seatId,
+      ];
     }
 
-    const bookingRequest = {
-      customerName: name,
-      customerEmail: email,
-      showtimeId: selectedShowtime.id,
-      seatIds: selectedSeatIds
-    };
+    setSelectedSeatIds(updated);
 
-    fetch("http://localhost:8080/api/bookings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(bookingRequest)
-    })
-    .then(res => {
-      if (!res.ok) throw new Error("Booking failed");
-      return res.json();
-    })
-    .then(data => {
-      Swal.fire(
-        "Booking Successful!",
-        `Your ticket is confirmed. Booking Ref: #${data.id}`,
-        "success"
-      );
-      
-      const bookingRecord = {
-        bookingId: data.id,
-        movie: movie,
-        name: name,
-        email: email,
-        time: selectedShowtime.showTime,
-        seats: data.seats ? data.seats.map(s => s.seatNumber) : [],
-        total: data.totalAmount
-      };
-
-      const history = JSON.parse(localStorage.getItem("history")) || [];
-      history.push(bookingRecord);
-      localStorage.setItem("history", JSON.stringify(history));
-
-      navigate("/bill", { state: bookingRecord });
-    })
-    .catch(err => {
-      Swal.fire("Error", "Could not complete booking", "error");
-    });
+    onSeatSelect(updated);
   };
 
   return (
-    <div className="booking-container">
-      <motion.div className="booking-card"
-        initial={{ scale: 0.8 }}
-        animate={{ scale: 1 }}
+    <div className="seat-selection-box">
+      <h3>Select Seats</h3>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(10, 1fr)",
+          gap: "5px",
+          margin: "15px 0",
+        }}
       >
-        <h2>Booking for {movie.title}</h2>
-        <img src={movie.posterUrl} width="200" alt={movie.title} />
+        {seats.map((seat) => (
+          <button
+            key={seat.id}
+            onClick={() =>
+              toggleSeat(seat.id)
+            }
+            disabled={seat.isBooked}
+            className={
+              selectedSeatIds.includes(
+                seat.id
+              )
+                ? "seat selected"
+                : "seat"
+            }
+            style={{
+              padding: "10px 5px",
+              backgroundColor:
+                seat.isBooked
+                  ? "#ccc"
+                  : selectedSeatIds.includes(
+                      seat.id
+                    )
+                  ? "#4caf50"
+                  : "#fff",
+              color: seat.isBooked
+                ? "#666"
+                : "#000",
+              border: "1px solid #999",
+              borderRadius: "4px",
+              cursor: seat.isBooked
+                ? "not-allowed"
+                : "pointer",
+              opacity: seat.isBooked
+                ? 0.6
+                : 1,
+            }}
+          >
+            {seat.seatNumber}
+          </button>
+        ))}
+      </div>
 
-        {selectedShowtime && <h3>Price per seat: ₹{selectedShowtime.ticketPrice}</h3>}
+      <div className="seat-info">
+        <h4>
+          Total Seats:{" "}
+          {selectedSeatIds.length}
+        </h4>
 
-        <input
-          type="text"
-          placeholder="Enter Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <br />
-
-        <input
-          type="email"
-          placeholder="Email Address"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <br />
-
-        <select
-          value={selectedShowtime ? selectedShowtime.id : ""}
-          onChange={handleShowtimeChange}
-        >
-          {showtimes.map(st => (
-            <option key={st.id} value={st.id}>
-              {new Date(st.showTime).toLocaleString([], {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-              })}
-            </option>
-          ))}
-        </select>
-        <br />
-
-        {selectedShowtime && (
-          <SeatSelection
-            showtimeId={selectedShowtime.id}
-            price={selectedShowtime.ticketPrice}
-            onSeatSelect={(seatIds) => setSelectedSeatIds(seatIds)}
-          />
-        )}
-
-        <h2>Total: ₹{total}</h2>
-
-        <button
-          onClick={confirmBooking}
-          style={{
-            padding: "10px",
-            background: "blue",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            marginTop: "10px",
-            cursor: "pointer"
-          }}
-        >
-          Confirm Booking
-        </button>
-
-      </motion.div>
+        <h4>
+          Total Price: ₹
+          {(
+            selectedSeatIds.length * price
+          ).toFixed(2)}
+        </h4>
+      </div>
     </div>
   );
 }
 
-export default Booking;
+export default SeatSelection;
