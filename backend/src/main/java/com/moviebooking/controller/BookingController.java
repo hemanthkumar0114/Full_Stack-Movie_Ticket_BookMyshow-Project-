@@ -5,6 +5,7 @@ import com.moviebooking.dto.BookingResponseDTO;
 import com.moviebooking.dto.SeatLockRequest;
 import com.moviebooking.dto.SeatLockResponse;
 import com.moviebooking.service.BookingService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,23 +20,15 @@ public class BookingController {
     private BookingService bookingService;
 
     @PostMapping("/api/v1/bookings/lock-seats")
-    public ResponseEntity<SeatLockResponse> lockSeats(@RequestBody SeatLockRequest request) {
-        try {
-            SeatLockResponse response = bookingService.lockSeats(request);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(new SeatLockResponse(false, e.getMessage()));
-        }
+    public ResponseEntity<SeatLockResponse> lockSeats(@Valid @RequestBody SeatLockRequest request) {
+        SeatLockResponse response = bookingService.lockSeats(request);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/api/v1/bookings/confirm")
-    public ResponseEntity<?> confirmBooking(@RequestBody BookingConfirmRequest request) {
-        try {
-            BookingResponseDTO response = bookingService.confirmBooking(request);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<BookingResponseDTO> confirmBooking(@Valid @RequestBody BookingConfirmRequest request) {
+        BookingResponseDTO response = bookingService.confirmBooking(request);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/api/v1/bookings/history")
@@ -44,16 +37,5 @@ public class BookingController {
             return ResponseEntity.ok(bookingService.getBookingsByEmail(email.trim()));
         }
         return ResponseEntity.ok(bookingService.getAllBookings());
-    }
-
-    // Compatibility endpoint
-    @PostMapping("/api/bookings")
-    public ResponseEntity<?> createBookingLegacy(@RequestBody BookingConfirmRequest request) {
-        try {
-            BookingResponseDTO response = bookingService.confirmBooking(request);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
     }
 }

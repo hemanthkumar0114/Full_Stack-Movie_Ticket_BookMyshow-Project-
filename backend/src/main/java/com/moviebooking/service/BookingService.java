@@ -5,6 +5,9 @@ import com.moviebooking.dto.BookingResponseDTO;
 import com.moviebooking.dto.SeatLockRequest;
 import com.moviebooking.dto.SeatLockResponse;
 import com.moviebooking.entity.*;
+import com.moviebooking.exception.InvalidBookingException;
+import com.moviebooking.exception.ResourceNotFoundException;
+import com.moviebooking.exception.SeatConflictException;
 import com.moviebooking.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,51 +38,53 @@ public class BookingService {
 
     @Transactional
     public SeatLockResponse lockSeats(SeatLockRequest request) {
-        showtimeSeatRepository.releaseExpiredLocks(LocalDateTime.now());
-
         Long showtimeId = request.getShowtimeId();
         List<Long> seatIds = request.getSeatIds();
-        String sessionId = (request.getSessionId() != null && !request.getSessionId().isEmpty())
-                ? request.getSessionId()
-                : UUID.randomUUID().toString();
+        String sessionId = request.getSessionId();
 
         Showtime showtime = showtimeRepository.findById(showtimeId)
-                .orElseThrow(() -> new RuntimeException("Showtime not found: " + showtimeId));
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found: " + showtimeId));
 
-        List<ShowtimeSeat> existingShowtimeSeats = showtimeSeatRepository.findByShowtimeId(showtimeId);
-        Map<Long, ShowtimeSeat> ssMap = existingShowtimeSeats.stream()
-                .collect(Collectors.toMap(ss -> ss.getSeat().getId(), ss -> ss));
+        List<Seat> seats = seatRepository.findAllById(seatIds);
+        if (seats.size() != seatIds.size()) {
+            throw new InvalidBookingException("Some selected seats do not exist.");
+        }
 
-        LocalDateTime lockExpiry = LocalDateTime.now().plusMinutes(5);
+        // Ensure ShowtimeSeat records exist for all requested seats
+        List<ShowtimeSeat> existingShowtimeSeats = showtimeSeatRepository.findByShowtimeIdAndSeatIds(showtimeId, seatIds);
+        Set<Long> existingSeatIds = existingShowtimeSeats.stream()
+                .map(ss -> ss.getSeat().getId())
+                .collect(Collectors.toSet());
 
-        for (Long seatId : seatIds) {
-            ShowtimeSeat ss = ssMap.get(seatId);
-            if (ss != null) {
-                if ("BOOKED".equalsIgnoreCase(ss.getStatus())) {
-                    return new SeatLockResponse(false, "Seat #" + ss.getSeat().getRowName() + ss.getSeat().getSeatNumber() + " is already booked.");
-                }
-                if ("LOCKED".equalsIgnoreCase(ss.getStatus()) && ss.getLockedUntil() != null && ss.getLockedUntil().isAfter(LocalDateTime.now())) {
-                    if (!sessionId.equals(ss.getLockedBySession())) {
-                        return new SeatLockResponse(false, "Seat #" + ss.getSeat().getRowName() + ss.getSeat().getSeatNumber() + " is temporarily held by another customer.");
-                    }
-                }
+        List<ShowtimeSeat> newShowtimeSeats = new ArrayList<>();
+        for (Seat seat : seats) {
+            if (!existingSeatIds.contains(seat.getId())) {
+                ShowtimeSeat ss = new ShowtimeSeat();
+                ss.setShowtime(showtime);
+                ss.setSeat(seat);
+                ss.setStatus("AVAILABLE");
+                ss.setLockedUntil(null);
+                ss.setLockedBySession(null);
+                newShowtimeSeats.add(ss);
+            }
+        }
+        if (!newShowtimeSeats.isEmpty()) {
+            try {
+                showtimeSeatRepository.saveAllAndFlush(newShowtimeSeats);
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // A concurrent thread inserted the ShowtimeSeat record simultaneously.
+                // Catching this allows atomic update query to safely evaluate seat lock availability.
             }
         }
 
-        // Lock all seats for 5 minutes
-        for (Long seatId : seatIds) {
-            ShowtimeSeat ss = ssMap.get(seatId);
-            if (ss == null) {
-                Seat seat = seatRepository.findById(seatId)
-                        .orElseThrow(() -> new RuntimeException("Seat not found: " + seatId));
-                ss = new ShowtimeSeat();
-                ss.setShowtime(showtime);
-                ss.setSeat(seat);
-            }
-            ss.setStatus("LOCKED");
-            ss.setLockedUntil(lockExpiry);
-            ss.setLockedBySession(sessionId);
-            showtimeSeatRepository.save(ss);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime lockExpiry = now.plusMinutes(5);
+
+        // Perform atomic lock update query
+        int updatedRows = showtimeSeatRepository.lockSeatsAtomic(showtimeId, seatIds, sessionId, lockExpiry, now);
+
+        if (updatedRows != seatIds.size()) {
+            throw new SeatConflictException("One or more selected seats are no longer available or held by another customer.");
         }
 
         SeatLockResponse response = new SeatLockResponse(true, "Seats locked successfully for 5 minutes.");
@@ -91,41 +96,45 @@ public class BookingService {
 
     @Transactional
     public BookingResponseDTO confirmBooking(BookingConfirmRequest request) {
-        showtimeSeatRepository.releaseExpiredLocks(LocalDateTime.now());
-
         Showtime showtime = showtimeRepository.findById(request.getShowtimeId())
-                .orElseThrow(() -> new RuntimeException("Showtime not found: " + request.getShowtimeId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found: " + request.getShowtimeId()));
 
         List<Seat> seats = seatRepository.findAllById(request.getSeatIds());
         if (seats.size() != request.getSeatIds().size()) {
-            throw new RuntimeException("Some selected seats are invalid.");
+            throw new InvalidBookingException("Some selected seats are invalid.");
         }
 
-        List<ShowtimeSeat> showtimeSeats = showtimeSeatRepository.findByShowtimeId(request.getShowtimeId());
+        List<ShowtimeSeat> showtimeSeats = showtimeSeatRepository.findByShowtimeIdAndSeatIds(request.getShowtimeId(), request.getSeatIds());
         Map<Long, ShowtimeSeat> ssMap = showtimeSeats.stream()
                 .collect(Collectors.toMap(ss -> ss.getSeat().getId(), ss -> ss));
 
-        // Verify seats are not booked by someone else
+        LocalDateTime now = LocalDateTime.now();
+
+        // Verification loop checking session ownership, status, and lock expiry
         for (Seat seat : seats) {
             ShowtimeSeat ss = ssMap.get(seat.getId());
-            if (ss != null && "BOOKED".equalsIgnoreCase(ss.getStatus())) {
-                throw new RuntimeException("Seat " + seat.getRowName() + seat.getSeatNumber() + " has already been booked.");
+            if (ss == null) {
+                throw new SeatConflictException("Seat " + seat.getRowName() + seat.getSeatNumber() + " is not locked.");
+            }
+            if (!"LOCKED".equalsIgnoreCase(ss.getStatus())) {
+                throw new SeatConflictException("Seat " + seat.getRowName() + seat.getSeatNumber() + " is not locked by your current session.");
+            }
+            if (!request.getSessionId().equals(ss.getLockedBySession())) {
+                throw new SeatConflictException("Seat " + seat.getRowName() + seat.getSeatNumber() + " is held by another session.");
+            }
+            if (ss.getLockedUntil() == null || !ss.getLockedUntil().isAfter(now)) {
+                throw new SeatConflictException("Seat lock for " + seat.getRowName() + seat.getSeatNumber() + " has expired.");
             }
         }
 
         // Mark seats as permanently BOOKED
         for (Seat seat : seats) {
             ShowtimeSeat ss = ssMap.get(seat.getId());
-            if (ss == null) {
-                ss = new ShowtimeSeat();
-                ss.setShowtime(showtime);
-                ss.setSeat(seat);
-            }
             ss.setStatus("BOOKED");
             ss.setLockedUntil(null);
             ss.setLockedBySession(null);
-            showtimeSeatRepository.save(ss);
         }
+        showtimeSeatRepository.saveAll(showtimeSeats);
 
         // Calculate Subtotal & Total
         BigDecimal ticketSubtotal = BigDecimal.ZERO;
@@ -136,8 +145,8 @@ public class BookingService {
         BigDecimal convenienceFee = new BigDecimal("35.00");
         BigDecimal totalAmount = ticketSubtotal.add(convenienceFee);
 
-        // Generate unique BMS Booking Code (e.g. BMS-849204)
-        String bookingCode = "BMS-" + (100000 + new Random().nextInt(900000));
+        // Generate secure UUID-based booking code
+        String bookingCode = "BMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
 
         Booking booking = new Booking();
         booking.setBookingCode(bookingCode);

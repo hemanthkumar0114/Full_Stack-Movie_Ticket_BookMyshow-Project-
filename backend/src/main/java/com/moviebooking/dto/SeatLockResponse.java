@@ -18,6 +18,7 @@ public class SeatLockResponse {
     }
 
     public Boolean getSuccess() { return success; }
+    public Boolean isSuccess() { return Boolean.TRUE.equals(success); }
     public void setSuccess(Boolean success) { this.success = success; }
 
     public String getMessage() { return message; }

@@ -14,7 +14,7 @@ import java.util.Optional;
 @Repository
 public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long> {
     List<ShowtimeSeat> findByShowtimeId(Long showtimeId);
-    
+
     Optional<ShowtimeSeat> findByShowtimeIdAndSeatId(Long showtimeId, Long seatId);
 
     @Query("SELECT ss FROM ShowtimeSeat ss WHERE ss.showtime.id = :showtimeId AND ss.seat.id IN :seatIds")
@@ -26,4 +26,15 @@ public interface ShowtimeSeatRepository extends JpaRepository<ShowtimeSeat, Long
     @Query("UPDATE ShowtimeSeat ss SET ss.status = 'AVAILABLE', ss.lockedUntil = null, ss.lockedBySession = null " +
            "WHERE ss.status = 'LOCKED' AND ss.lockedUntil < :now")
     void releaseExpiredLocks(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query("UPDATE ShowtimeSeat ss SET ss.status = 'LOCKED', ss.lockedBySession = :sessionId, ss.lockedUntil = :expiry " +
+           "WHERE ss.showtime.id = :showtimeId AND ss.seat.id IN :seatIds " +
+           "AND (ss.status = 'AVAILABLE' OR (ss.status = 'LOCKED' AND (ss.lockedUntil < :now OR ss.lockedBySession = :sessionId)))")
+    int lockSeatsAtomic(
+            @Param("showtimeId") Long showtimeId,
+            @Param("seatIds") List<Long> seatIds,
+            @Param("sessionId") String sessionId,
+            @Param("expiry") LocalDateTime expiry,
+            @Param("now") LocalDateTime now);
 }

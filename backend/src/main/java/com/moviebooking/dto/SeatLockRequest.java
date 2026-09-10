@@ -1,10 +1,19 @@
 package com.moviebooking.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 
 public class SeatLockRequest {
+
+    @NotNull(message = "Showtime ID is required")
     private Long showtimeId;
+
+    @NotEmpty(message = "At least one seat must be selected")
     private List<Long> seatIds;
+
+    @NotBlank(message = "Session ID is required")
     private String sessionId; // Browser session identifier
 
     public SeatLockRequest() {}

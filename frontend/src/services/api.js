@@ -1,7 +1,7 @@
 import { MOVIES_DATA, DEFAULT_POSTER_FALLBACK } from "../data/moviesData";
 
-const BASE_URL =
-  import.meta.env.VITE_API_URL || "https://corrected-backend.onrender.com/api/v1";
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
+
 /**
  * Generates or retrieves a unique session ID for atomic seat reservations.
  */
@@ -116,75 +116,50 @@ export const api = {
   },
 
   /**
-   * Lock selected seats for 5 minutes to prevent race conditions
+   * Lock selected seats for 5 minutes to prevent race conditions.
+   * State-changing operation: NO client-side fallback mocks on failure.
    */
   async lockSeats(showtimeId, seatIds) {
     const sessionId = getSessionId();
-    try {
-      const res = await fetch(`${BASE_URL}/bookings/lock-seats`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          showtimeId: parseInt(showtimeId, 10),
-          seatIds,
-          sessionId
-        })
-      });
-      if (res.ok) return await res.json();
-    } catch (e) {
-      // Local fallback
-    }
+    const res = await fetch(`${BASE_URL}/bookings/lock-seats`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        showtimeId: parseInt(showtimeId, 10),
+        seatIds,
+        sessionId
+      })
+    });
 
-    return {
-      success: true,
-      message: "Seats reserved for 5 minutes.",
-      sessionId,
-      lockedSeatIds: seatIds,
-      lockExpiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
-    };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data.message || data.error || `Seat lock failed with status ${res.status}`;
+      throw new Error(errorMsg);
+    }
+    return data;
   },
 
   /**
-   * Confirm booking transaction and generate digital M-Ticket
+   * Confirm booking transaction and generate digital M-Ticket.
+   * State-changing operation: NO client-side fabrication of confirmation tickets inside catch blocks.
    */
   async confirmBooking(bookingData) {
     const sessionId = getSessionId();
-    try {
-      const res = await fetch(`${BASE_URL}/bookings/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...bookingData,
-          sessionId
-        })
-      });
-      if (res.ok) return await res.json();
-    } catch (e) {
-      // Instant client-side M-Ticket generation fallback
-    }
+    const res = await fetch(`${BASE_URL}/bookings/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...bookingData,
+        sessionId
+      })
+    });
 
-    const randomNum = Math.floor(100000 + Math.random() * 900000);
-    return {
-      bookingId: Date.now(),
-      bookingCode: `BMS-${randomNum}`,
-      movieTitle: bookingData.movieTitle || "Kalki 2898 AD",
-      posterUrl: bookingData.posterUrl || MOVIES_DATA[0].posterUrl,
-      cinemaName: bookingData.cinemaName || "PVR ICON: Phoenix Palladium",
-      screenName: bookingData.screenName || "Audi 1 - IMAX with Laser",
-      soundType: "IMAX 12.1 Immersive Sound",
-      formatType: "IMAX 3D",
-      showTime: bookingData.showTime || new Date().toISOString(),
-      userName: bookingData.userName || "Customer",
-      userEmail: bookingData.userEmail || "user@bookmyshow.com",
-      userPhone: bookingData.userPhone || "+91 9876543210",
-      seatNumbers: bookingData.seatNumbers || ["A1", "A2"],
-      ticketSubtotal: bookingData.ticketSubtotal || 900,
-      convenienceFee: 35,
-      totalAmount: (bookingData.ticketSubtotal || 900) + 35,
-      paymentMethod: bookingData.paymentMethod || "UPI (Google Pay)",
-      bookingStatus: "CONFIRMED",
-      bookingTime: new Date().toLocaleString()
-    };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorMsg = data.message || data.error || `Booking confirmation failed with status ${res.status}`;
+      throw new Error(errorMsg);
+    }
+    return data;
   },
 
   /**
@@ -196,7 +171,7 @@ export const api = {
       const res = await fetch(url);
       if (res.ok) return await res.json();
     } catch (e) {
-      // Local fallback
+      // Local fallback for GET requests
     }
     return JSON.parse(localStorage.getItem("bms_booking_history")) || [];
   }

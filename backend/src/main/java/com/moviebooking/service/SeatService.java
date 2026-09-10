@@ -6,6 +6,7 @@ import com.moviebooking.dto.ShowtimeSeatMapDTO;
 import com.moviebooking.entity.Seat;
 import com.moviebooking.entity.Showtime;
 import com.moviebooking.entity.ShowtimeSeat;
+import com.moviebooking.exception.ResourceNotFoundException;
 import com.moviebooking.repository.SeatRepository;
 import com.moviebooking.repository.ShowtimeRepository;
 import com.moviebooking.repository.ShowtimeSeatRepository;
@@ -32,11 +33,8 @@ public class SeatService {
 
     @Transactional
     public ShowtimeSeatMapDTO getSeatMapForShowtime(Long showtimeId, String sessionId) {
-        // Auto-release any locks older than 5 minutes
-        showtimeSeatRepository.releaseExpiredLocks(LocalDateTime.now());
-
         Showtime showtime = showtimeRepository.findById(showtimeId)
-                .orElseThrow(() -> new RuntimeException("Showtime not found: " + showtimeId));
+                .orElseThrow(() -> new ResourceNotFoundException("Showtime not found: " + showtimeId));
 
         Long screenId = showtime.getScreen().getId();
         List<Seat> screenSeats = seatRepository.findByScreenIdOrderByRowNameAscSeatNumberAsc(screenId);
