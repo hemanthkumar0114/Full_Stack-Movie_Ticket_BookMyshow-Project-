@@ -1,5 +1,6 @@
 package com.moviebooking.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,9 @@ public class ShowtimeSeatMapDTO {
     private List<SeatTierDTO> tiers = new ArrayList<>();
     private Integer totalSeats;
     private Integer availableSeats;
+    private BigDecimal convenienceFee;
+    private Integer maxSeatsPerBooking;
+    private Integer lockMinutes;
 
     public ShowtimeSeatMapDTO() {}
 
@@ -51,4 +55,13 @@ public class ShowtimeSeatMapDTO {
 
     public Integer getAvailableSeats() { return availableSeats; }
     public void setAvailableSeats(Integer availableSeats) { this.availableSeats = availableSeats; }
+
+    public BigDecimal getConvenienceFee() { return convenienceFee; }
+    public void setConvenienceFee(BigDecimal convenienceFee) { this.convenienceFee = convenienceFee; }
+
+    public Integer getMaxSeatsPerBooking() { return maxSeatsPerBooking; }
+    public void setMaxSeatsPerBooking(Integer maxSeatsPerBooking) { this.maxSeatsPerBooking = maxSeatsPerBooking; }
+
+    public Integer getLockMinutes() { return lockMinutes; }
+    public void setLockMinutes(Integer lockMinutes) { this.lockMinutes = lockMinutes; }
 }

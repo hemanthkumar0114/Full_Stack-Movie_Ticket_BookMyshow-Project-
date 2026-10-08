@@ -1,41 +1,63 @@
 package com.moviebooking.controller;
 
-import com.moviebooking.dto.BookingConfirmRequest;
 import com.moviebooking.dto.BookingResponseDTO;
+import com.moviebooking.dto.CreateBookingRequest;
 import com.moviebooking.dto.SeatLockRequest;
 import com.moviebooking.dto.SeatLockResponse;
+import com.moviebooking.security.AuthenticatedUser;
 import com.moviebooking.service.BookingService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.net.URI;
 import java.util.List;
 
 @RestController
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/v1")
 public class BookingController {
 
-    @Autowired
-    private BookingService bookingService;
+    private final BookingService bookingService;
 
-    @PostMapping("/api/v1/bookings/lock-seats")
-    public ResponseEntity<SeatLockResponse> lockSeats(@Valid @RequestBody SeatLockRequest request) {
-        SeatLockResponse response = bookingService.lockSeats(request);
-        return ResponseEntity.ok(response);
+    public BookingController(BookingService bookingService) {
+        this.bookingService = bookingService;
     }
 
-    @PostMapping("/api/v1/bookings/confirm")
-    public ResponseEntity<BookingResponseDTO> confirmBooking(@Valid @RequestBody BookingConfirmRequest request) {
-        BookingResponseDTO response = bookingService.confirmBooking(request);
-        return ResponseEntity.ok(response);
+    @PostMapping("/showtimes/{showtimeId}/seat-locks")
+    public ResponseEntity<SeatLockResponse> lockSeats(@PathVariable Long showtimeId,
+                                                      @Valid @RequestBody SeatLockRequest request,
+                                                      @AuthenticationPrincipal AuthenticatedUser principal) {
+        SeatLockResponse response = bookingService.lockSeats(showtimeId, request, principal.id());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/api/v1/bookings/history")
-    public ResponseEntity<List<BookingResponseDTO>> getBookingHistory(@RequestParam(required = false) String email) {
-        if (email != null && !email.trim().isEmpty()) {
-            return ResponseEntity.ok(bookingService.getBookingsByEmail(email.trim()));
-        }
-        return ResponseEntity.ok(bookingService.getAllBookings());
+    @PostMapping("/bookings")
+    public ResponseEntity<BookingResponseDTO> createBooking(@Valid @RequestBody CreateBookingRequest request,
+                                                            @AuthenticationPrincipal AuthenticatedUser principal) {
+        BookingResponseDTO booking = bookingService.createBooking(request, principal.id());
+        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
+                .path("/api/v1/bookings/{id}")
+                .buildAndExpand(booking.getBookingId())
+                .toUri();
+        return ResponseEntity.created(location).body(booking);
+    }
+
+    @GetMapping("/bookings")
+    public ResponseEntity<List<BookingResponseDTO>> getMyBookings(@AuthenticationPrincipal AuthenticatedUser principal) {
+        return ResponseEntity.ok(bookingService.getBookingsForUser(principal.id()));
+    }
+
+    @GetMapping("/bookings/{bookingId}")
+    public ResponseEntity<BookingResponseDTO> getMyBooking(@PathVariable Long bookingId,
+                                                           @AuthenticationPrincipal AuthenticatedUser principal) {
+        return ResponseEntity.ok(bookingService.getBookingForUser(bookingId, principal.id()));
     }
 }

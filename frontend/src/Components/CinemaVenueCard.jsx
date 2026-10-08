@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 
-function CinemaVenueCard({ cinema, onSelectShowtime }) {
+function CinemaVenueCard({ cinema }) {
   if (!cinema) return null;
 
   const facilitiesList = cinema.facilities
-    ? cinema.facilities.split(",").map((f) => f.trim())
-    : ["M-Ticket", "Food & Beverage"];
+    ? cinema.facilities.split(",").map((f) => f.trim()).filter(Boolean)
+    : [];
 
   return (
     <div className="bms-venue-card">
@@ -20,8 +20,8 @@ function CinemaVenueCard({ cinema, onSelectShowtime }) {
         <p className="venue-address">{cinema.locationAddress}</p>
 
         <div className="venue-facilities">
-          {facilitiesList.map((fac, idx) => (
-            <span key={idx} className="facility-pill">
+          {facilitiesList.map((fac) => (
+            <span key={fac} className="facility-pill">
               {fac.includes("M-Ticket") ? "📱 " : fac.includes("Food") ? "🍿 " : fac.includes("Wheelchair") ? "♿ " : "✨ "}
               {fac}
             </span>

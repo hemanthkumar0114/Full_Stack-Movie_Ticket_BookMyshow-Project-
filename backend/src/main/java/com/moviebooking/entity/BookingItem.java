@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "booking_items")
+@Table(name = "booking_items", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_booking_items_showtime_seat", columnNames = {"showtime_id", "seat_id"})
+})
 public class BookingItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

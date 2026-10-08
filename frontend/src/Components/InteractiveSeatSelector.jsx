@@ -1,23 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-/**
- * InteractiveSeatSelector
- * Dual-mode cinema seat selector supporting both structured tiered grid layouts
- * and an interactive HTML5 Canvas 2D physics simulation for seat exploration.
- */
 function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSeat }) {
-  const [viewMode, setViewMode] = useState("standard"); // "standard" | "interactive"
+  const [viewMode, setViewMode] = useState("standard");
   const canvasRef = useRef(null);
   const animationFrameId = useRef(null);
   const seatsPhysicsState = useRef([]);
   const mousePos = useRef({ x: -1000, y: -1000, active: false });
 
   const tiers = seatMapData?.tiers || [];
-
-  // Extract all flat seat objects
   const allSeats = tiers.flatMap((t) => t.seats || []);
-
-  // Initialize Canvas physics particles
   const initializePhysicsParticles = useCallback(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -49,8 +40,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
       };
     });
   }, [allSeats]);
-
-  // Handle Canvas Resize
   useEffect(() => {
     if (viewMode !== "interactive" || !canvasRef.current) return;
 
@@ -69,8 +58,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
     window.addEventListener("resize", updateCanvasDimensions);
     return () => window.removeEventListener("resize", updateCanvasDimensions);
   }, [viewMode, initializePhysicsParticles]);
-
-  // Main Canvas Render & Physics Loop
   useEffect(() => {
     if (viewMode !== "interactive" || !canvasRef.current) return;
 
@@ -84,12 +71,8 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
       const rect = canvas.getBoundingClientRect();
       const width = rect.width;
       const height = rect.height;
-
-      // Dark cinema viewport background
       ctx.fillStyle = "#0F1017";
       ctx.fillRect(0, 0, width, height);
-
-      // Ambient background glow
       const bgGradient = ctx.createRadialGradient(width / 2, height / 2, 20, width / 2, height / 2, width * 0.65);
       bgGradient.addColorStop(0, "rgba(59, 130, 246, 0.08)");
       bgGradient.addColorStop(1, "rgba(15, 16, 23, 0.95)");
@@ -97,12 +80,8 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
       ctx.fillRect(0, 0, width, height);
 
       const particles = seatsPhysicsState.current;
-
-      // Physics Integration: Velocities, Boundary Collisions, and Mouse Field
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
-
-        // Cursor attraction field
         if (mousePos.current.active) {
           const dx = mousePos.current.x - p.x;
           const dy = mousePos.current.y - p.y;
@@ -115,16 +94,10 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
             p.vy += (dy / dist) * force;
           }
         }
-
-        // Apply velocities
         p.x += p.vx;
         p.y += p.vy;
-
-        // Damping / Friction
         p.vx *= 0.985;
         p.vy *= 0.985;
-
-        // Boundary bounce
         if (p.x - p.radius < 10) {
           p.x = p.radius + 10;
           p.vx = Math.abs(p.vx) * 0.85;
@@ -140,8 +113,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           p.y = height - p.radius - 10;
           p.vy = -Math.abs(p.vy) * 0.85;
         }
-
-        // Inter-particle elastic collisions
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const cdx = p2.x - p.x;
@@ -170,8 +141,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           }
         }
       }
-
-      // Draw connection trails between selected seats
       const selectedParticles = particles.filter((p) => selectedSeatIds.includes(p.seatId));
       if (selectedParticles.length > 1) {
         ctx.beginPath();
@@ -185,13 +154,11 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
         ctx.stroke();
         ctx.setLineDash([]);
       }
-
-      // Draw Seat Particles
       const now = performance.now() * 0.003;
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         const isSelected = selectedSeatIds.includes(p.seatId);
-        const isBooked = p.status === "BOOKED";
+        const isBooked = p.status === "BOOKED" || (p.status === "LOCKED" && !p.isLockedByMe);
 
         ctx.save();
         ctx.beginPath();
@@ -210,7 +177,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           ctx.lineWidth = 1.5;
           ctx.stroke();
         } else if (isSelected) {
-          // Selected glow
           ctx.fillStyle = "#F84464";
           ctx.shadowColor = "#F84464";
           ctx.shadowBlur = 16;
@@ -220,7 +186,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           ctx.lineWidth = 2;
           ctx.stroke();
         } else {
-          // Tier Color Fill
           ctx.fillStyle = p.hovered ? "#FFFFFF" : p.color;
           ctx.shadowColor = p.color;
           ctx.shadowBlur = p.hovered ? 12 : 4;
@@ -230,8 +195,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           ctx.lineWidth = 1;
           ctx.stroke();
         }
-
-        // Draw Seat Label (e.g. A1, B4)
         ctx.fillStyle = isSelected || isBooked ? "#FFFFFF" : "#0F172A";
         ctx.font = `bold ${Math.max(9, currentRadius * 0.55)}px sans-serif`;
         ctx.textAlign = "center";
@@ -250,8 +213,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
       if (animationFrameId.current) cancelAnimationFrame(animationFrameId.current);
     };
   }, [viewMode, selectedSeatIds]);
-
-  // Canvas Mouse Move & Click Handlers
   const handleCanvasMouseMove = (e) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
@@ -284,7 +245,8 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
       const p = particles[i];
       const dist = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
       if (dist <= p.radius + 6) {
-        if (p.status !== "BOOKED") {
+        const unavailable = p.status === "BOOKED" || (p.status === "LOCKED" && !p.isLockedByMe);
+        if (!unavailable) {
           onToggleSeat({
             seatId: p.seatId,
             seatCode: p.seatCode || `${p.rowName}${p.seatNumber}`,
@@ -292,7 +254,8 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
             seatNumber: p.seatNumber,
             tierCategory: p.tierCategory,
             price: p.price,
-            status: p.status
+            status: p.status,
+            isLockedByMe: p.isLockedByMe
           });
         }
         break;
@@ -302,17 +265,15 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
 
   return (
     <div className="seat-layout-container">
-      {/* Viewport Header */}
       <div className="seat-view-header">
         <div className="cinema-header-meta">
-          <h2>{seatMapData.cinemaName || "PVR Multiplex Auditorium"}</h2>
+          <h2>{seatMapData.cinemaName}</h2>
           <p>
-            {seatMapData.screenName || "Audi 1"} • {seatMapData.movieTitle || "Now Showing"}
+            {seatMapData.screenName} • {seatMapData.movieTitle}
           </p>
         </div>
-
-        {/* View Mode Toggle Button */}
         <button
+          type="button"
           className={`view-toggle-btn ${viewMode === "interactive" ? "active" : ""}`}
           onClick={() => setViewMode(viewMode === "standard" ? "interactive" : "standard")}
           title="Toggle between standard cinema grid and interactive 3D layout"
@@ -324,8 +285,6 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           <span className="mode-pill">{viewMode === "interactive" ? "Physics" : "Rows"}</span>
         </button>
       </div>
-
-      {/* Seating Legend */}
       <div className="seat-legend-bar">
         <div className="legend-item">
           <span className="legend-box seat-available"></span>
@@ -339,25 +298,16 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
           <span className="legend-box seat-booked"></span>
           <span>Unavailable</span>
         </div>
-        <div className="legend-item">
-          <span className="legend-box seat-recliner"></span>
-          <span>Recliner (₹450)</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-box seat-prime"></span>
-          <span>Prime (₹280)</span>
-        </div>
-        <div className="legend-item">
-          <span className="legend-box seat-classic"></span>
-          <span>Classic (₹180)</span>
-        </div>
+        {tiers.map((tier) => (
+          <div key={tier.tierName} className="legend-item">
+            <span className={`legend-box seat-${tier.tierName.toLowerCase()}`}></span>
+            <span>{tier.tierLabel || tier.tierName}</span>
+          </div>
+        ))}
       </div>
-
-      {/* Mode 1: Standard Cinema Tiered Grid */}
       {viewMode === "standard" && (
         <div className="tiered-grid-container">
           {tiers.map((tier) => {
-            // Group seats in this tier by Row Name
             const rowMap = {};
             (tier.seats || []).forEach((seat) => {
               if (!rowMap[seat.rowName]) rowMap[seat.rowName] = [];
@@ -378,7 +328,8 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
                       <div className="row-seats">
                         {seatsInRow.map((seat) => {
                           const isSelected = selectedSeatIds.includes(seat.seatId);
-                          const isBooked = seat.status === "BOOKED";
+                          const isBooked =
+                            seat.status === "BOOKED" || (seat.status === "LOCKED" && !seat.isLockedByMe);
 
                           let tierClass = "tier-classic";
                           if (seat.tierCategory === "RECLINER") tierClass = "tier-recliner";
@@ -405,16 +356,12 @@ function InteractiveSeatSelector({ seatMapData, selectedSeatIds = [], onToggleSe
               </div>
             );
           })}
-
-          {/* Cinema Projection Screen */}
           <div className="cinema-stage-container">
             <div className="stage-screen-curve"></div>
             <p className="stage-caption">Cinema Screen • All eyes this way</p>
           </div>
         </div>
       )}
-
-      {/* Mode 2: Interactive Dynamic Canvas View */}
       {viewMode === "interactive" && (
         <div className="canvas-viewport-container">
           <div className="canvas-instruction-badge">

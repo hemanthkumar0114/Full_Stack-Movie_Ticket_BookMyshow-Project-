@@ -21,15 +21,13 @@ function TicketModal({ isOpen, onClose, ticketData }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="ticket-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="ticket-modal-content" role="dialog" aria-modal="true" aria-label="Booking ticket" onClick={(e) => e.stopPropagation()}>
         <div className="ticket-modal-actions-top">
           <span className="success-badge">✅ Booking Confirmed!</span>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* Digital M-Ticket Card */}
         <div className="m-ticket-card" id="printable-ticket">
-          {/* Ticket Header */}
           <div className="m-ticket-header">
             <div className="m-ticket-brand">
               <span className="brand-icon">🎬</span>
@@ -41,14 +39,12 @@ function TicketModal({ isOpen, onClose, ticketData }) {
             </div>
           </div>
 
-          {/* Perforated Notch Divider Top */}
           <div className="perforation-divider">
             <div className="notch notch-left"></div>
             <div className="dashed-line"></div>
             <div className="notch notch-right"></div>
           </div>
 
-          {/* Ticket Body */}
           <div className="m-ticket-body">
             <div className="ticket-main-grid">
               <img
@@ -97,17 +93,14 @@ function TicketModal({ isOpen, onClose, ticketData }) {
             </div>
           </div>
 
-          {/* Perforated Notch Divider Bottom */}
           <div className="perforation-divider">
             <div className="notch notch-left"></div>
             <div className="dashed-line"></div>
             <div className="notch notch-right"></div>
           </div>
 
-          {/* Ticket Footer / Barcode */}
           <div className="m-ticket-footer">
             <div className="barcode-box">
-              {/* Simulated barcode lines */}
               <div className="barcode-visual">
                 {Array.from({ length: 48 }).map((_, i) => (
                   <span
@@ -131,7 +124,6 @@ function TicketModal({ isOpen, onClose, ticketData }) {
           </div>
         </div>
 
-        {/* Ticket Action Buttons */}
         <div className="ticket-footer-actions">
           <button className="ticket-btn print-btn" onClick={handlePrint}>
             🖨️ Print / Download PDF

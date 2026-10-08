@@ -7,13 +7,10 @@ function MovieCard({ movie }) {
 
   if (!movie) return null;
 
-  const languagesText = Array.isArray(movie.languages)
-    ? movie.languages.join(", ")
-    : movie.languages || "Hindi, Telugu";
-
-  const genresText = Array.isArray(movie.genres)
-    ? movie.genres.slice(0, 2).join(", ")
-    : movie.genres || "Action, Drama";
+  const languagesText = Array.isArray(movie.languages) ? movie.languages.join(", ") : movie.languages || "";
+  const genresText = Array.isArray(movie.genres) ? movie.genres.slice(0, 2).join(", ") : movie.genres || "";
+  const ratingText = typeof movie.rating === "number" ? `${movie.rating}/10` : movie.rating;
+  const certificate = movie.certificate || movie.certification;
 
   const isUpcoming = movie.category === "upcoming" || (typeof movie.rating === "string" && movie.rating.includes("Interested"));
 
@@ -32,25 +29,14 @@ function MovieCard({ movie }) {
           }}
         />
 
-        {/* Rating Overlay */}
-        <div className="bms-poster-rating">
-          {isUpcoming ? (
-            <>
-              <span className="star">🔥</span>
-              <span className="score">{movie.rating || "Upcoming"}</span>
-            </>
-          ) : (
-            <>
-              <span className="star">★</span>
-              <span className="score">
-                {typeof movie.rating === "number" ? `${movie.rating}/10` : movie.rating || "8.8/10"}
-              </span>
-              <span className="votes">{movie.votes || `${(movie.voteCount || 120000).toLocaleString()} Votes`}</span>
-            </>
-          )}
-        </div>
+        {ratingText && (
+          <div className="bms-poster-rating">
+            <span className="star">{isUpcoming ? "🔥" : "★"}</span>
+            <span className="score">{ratingText}</span>
+            {!isUpcoming && movie.votes && <span className="votes">{movie.votes}</span>}
+          </div>
+        )}
 
-        {/* Hover Quick Action */}
         <div className="bms-poster-overlay">
           <span className="quick-book-btn">
             {isUpcoming ? "Explore & Notify" : "Book Tickets"}
@@ -62,16 +48,16 @@ function MovieCard({ movie }) {
         <h3 className="bms-movie-title" title={movie.title}>
           {movie.title}
         </h3>
-        
+
         <div className="bms-movie-certification">
-          <span className="cert-pill">{movie.certificate || movie.certification || "UA"}</span>
+          {certificate && <span className="cert-pill">{certificate}</span>}
           <span className="genres-span">{genresText}</span>
         </div>
 
         {movie.formats && Array.isArray(movie.formats) && (
           <div className="card-formats-row">
-            {movie.formats.map((fmt, idx) => (
-              <span key={idx} className="format-tag-mini">{fmt}</span>
+            {movie.formats.map((fmt) => (
+              <span key={fmt} className="format-tag-mini">{fmt}</span>
             ))}
           </div>
         )}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCity } from "../context/CityContext";
+import { useCity } from "../hooks/useCity";
 
 function CityModal() {
   const { isCityModalOpen, setIsCityModalOpen, selectedCity, changeCity, cities } = useCity();

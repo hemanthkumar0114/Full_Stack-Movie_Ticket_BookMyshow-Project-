@@ -95,13 +95,11 @@ function HeroBanner({ movies = [], onWatchTrailer }) {
         </div>
       </div>
 
-      {/* Navigation Arrows */}
       {movies.length > 1 && (
         <>
           <button className="slider-arrow arrow-left" onClick={handlePrev} aria-label="Previous Slide">‹</button>
           <button className="slider-arrow arrow-right" onClick={handleNext} aria-label="Next Slide">›</button>
 
-          {/* Dots */}
           <div className="slider-dots">
             {movies.map((_, idx) => (
               <span

@@ -1,142 +1,126 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import FormField from "./FormField";
+import InlineAlert from "./InlineAlert";
+import { useAuth } from "../hooks/useAuth";
+import { useCountdown } from "../hooks/useCountdown";
+import { formatCurrency } from "../utils/formatters";
+import { hasErrors, validateOptionalPhone } from "../utils/validators";
+
+const PAYMENT_METHODS = [
+  { code: "UPI", label: "UPI (Google Pay / PhonePe / Paytm)", icon: "⚡" },
+  { code: "CARD", label: "Credit / Debit Card", icon: "💳" },
+  { code: "NET_BANKING", label: "Net Banking (All Indian Banks)", icon: "🏦" },
+  { code: "WALLET", label: "Apple Pay / Wallets", icon: "📱" }
+];
 
 function PaymentModal({
-  isOpen,
   onClose,
+  onExpire,
   showtimeData,
   selectedSeats,
-  onConfirmBooking,
-  isProcessing
+  convenienceFee,
+  lockSeconds,
+  onConfirmBooking
 }) {
-  const [userName, setUserName] = useState("Aarav Sharma");
-  const [userEmail, setUserEmail] = useState("aarav.sharma@example.com");
-  const [userPhone, setUserPhone] = useState("+91 9876543210");
-  const [paymentMethod, setPaymentMethod] = useState("UPI (Google Pay / PhonePe)");
-  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes in seconds
+  const { user } = useAuth();
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].code);
+  const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const secondsLeft = useCountdown(lockSeconds);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setTimeLeft(300);
+    if (secondsLeft <= 0) onExpire();
+  }, [secondsLeft, onExpire]);
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          alert("Your 5-minute seat reservation expired. Please select your seats again.");
-          onClose();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const ticketSubtotal = selectedSeats.reduce((acc, s) => acc + Number(s.price), 0);
-  const convenienceFee = 35.0;
+  const ticketSubtotal = selectedSeats.reduce((total, seat) => total + Number(seat.price), 0);
   const totalAmount = ticketSubtotal + convenienceFee;
 
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = String(timeLeft % 60).padStart(2, "0");
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = String(secondsLeft % 60).padStart(2, "0");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!userName.trim() || !userEmail.trim()) {
-      alert("Please enter your name and email.");
-      return;
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const nextErrors = { phone: validateOptionalPhone(phone) };
+    setErrors(nextErrors);
+    if (hasErrors(nextErrors)) return;
+
+    setIsProcessing(true);
+    setSubmitError("");
+    try {
+      await onConfirmBooking({ phone: phone.trim(), paymentMethod });
+    } catch (error) {
+      setSubmitError(error.message);
+      setErrors(error.fieldErrors || {});
+      setIsProcessing(false);
     }
-
-    onConfirmBooking({
-      showtimeId: showtimeData.showtimeId,
-      seatIds: selectedSeats.map((s) => s.seatId),
-      userName,
-      userEmail,
-      userPhone,
-      paymentMethod
-    });
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="payment-modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+      <div
+        className="payment-modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="payment-modal-header">
           <div className="payment-title-group">
-            <h3>💳 Quick Checkout</h3>
+            <h3 id="payment-modal-title">💳 Quick Checkout</h3>
             <span className="lock-timer-badge">
-              ⏳ Seat Lock Expires in: <strong>{minutes}:{seconds}</strong>
+              ⏳ Seat hold expires in: <strong>{minutes}:{seconds}</strong>
             </span>
           </div>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button type="button" className="close-btn" onClick={onClose} aria-label="Close checkout">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="payment-form">
+        <form onSubmit={handleSubmit} className="payment-form" noValidate>
           <div className="payment-grid-layout">
-            {/* Left: Customer Info & Payment Method */}
             <div className="payment-left-col">
-              <h4>1. Contact Details (For M-Ticket delivery)</h4>
-              <div className="form-group">
-                <label>Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter your name"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                />
-              </div>
+              <h4>1. Contact details</h4>
+              <p className="booking-as">
+                Booking as <strong>{user?.name}</strong> ({user?.email})
+              </p>
 
-              <div className="form-group">
-                <label>Email Address</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="Enter your email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                />
-              </div>
+              <FormField
+                id="payment-phone"
+                name="phone"
+                type="tel"
+                label="Mobile number (optional)"
+                placeholder="+91 Mobile number"
+                autoComplete="tel"
+                value={phone}
+                onChange={(event) => {
+                  setPhone(event.target.value);
+                  setErrors({});
+                }}
+                error={errors.phone}
+              />
 
-              <div className="form-group">
-                <label>Mobile Number</label>
-                <input
-                  type="tel"
-                  placeholder="+91 Mobile number"
-                  value={userPhone}
-                  onChange={(e) => setUserPhone(e.target.value)}
-                />
-              </div>
-
-              <h4>2. Select Payment Mode</h4>
+              <h4>2. Select payment mode</h4>
               <div className="payment-methods-list">
-                {[
-                  { id: "upi", label: "UPI (Google Pay / PhonePe / Paytm)", icon: "⚡" },
-                  { id: "card", label: "Credit / Debit Card", icon: "💳" },
-                  { id: "netbanking", label: "Net Banking (All Indian Banks)", icon: "🏦" },
-                  { id: "wallet", label: "Apple Pay / Wallets", icon: "📱" }
-                ].map((pm) => (
+                {PAYMENT_METHODS.map((method) => (
                   <label
-                    key={pm.id}
-                    className={`payment-method-card ${paymentMethod.includes(pm.id) ? "selected" : ""}`}
+                    key={method.code}
+                    className={`payment-method-card ${paymentMethod === method.code ? "selected" : ""}`}
                   >
                     <input
                       type="radio"
                       name="paymentMethod"
-                      value={pm.label}
-                      checked={paymentMethod === pm.label}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      value={method.code}
+                      checked={paymentMethod === method.code}
+                      onChange={() => setPaymentMethod(method.code)}
                     />
-                    <span className="pm-icon">{pm.icon}</span>
-                    <span className="pm-label">{pm.label}</span>
+                    <span className="pm-icon">{method.icon}</span>
+                    <span className="pm-label">{method.label}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            {/* Right: Booking Summary Breakdown */}
             <div className="payment-right-col">
               <div className="booking-summary-card">
                 <h4>Order Summary</h4>
@@ -153,37 +137,35 @@ function PaymentModal({
 
                 <div className="summary-seats-row">
                   <span>Seats ({selectedSeats.length}):</span>
-                  <strong>{selectedSeats.map((s) => s.seatCode).join(", ")}</strong>
+                  <strong>{selectedSeats.map((seat) => seat.seatCode).join(", ")}</strong>
                 </div>
 
                 <hr className="summary-divider" />
 
                 <div className="summary-price-row">
-                  <span>Ticket Subtotal:</span>
-                  <span>₹{ticketSubtotal.toFixed(2)}</span>
+                  <span>Ticket subtotal:</span>
+                  <span>{formatCurrency(ticketSubtotal)}</span>
                 </div>
                 <div className="summary-price-row">
-                  <span>Integrated GST & Convenience Fee:</span>
-                  <span>₹{convenienceFee.toFixed(2)}</span>
+                  <span>Convenience fee:</span>
+                  <span>{formatCurrency(convenienceFee)}</span>
                 </div>
 
                 <hr className="summary-divider" />
 
                 <div className="summary-price-row summary-total-row">
-                  <span>Total Amount Payable:</span>
-                  <span className="total-highlight">₹{totalAmount.toFixed(2)}</span>
+                  <span>Total payable:</span>
+                  <span className="total-highlight">{formatCurrency(totalAmount)}</span>
                 </div>
 
-                <button
-                  type="submit"
-                  className="confirm-pay-btn"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? "Confirming Booking..." : `Pay ₹${totalAmount.toFixed(2)} & Get Ticket`}
+                <InlineAlert message={submitError} onDismiss={() => setSubmitError("")} />
+
+                <button type="submit" className="confirm-pay-btn" disabled={isProcessing}>
+                  {isProcessing ? "Confirming booking..." : `Pay ${formatCurrency(totalAmount)} & get ticket`}
                 </button>
 
                 <p className="security-note">
-                  🔒 256-bit SSL Encrypted & Secure Payment Gateway
+                  Demo checkout: no real payment is taken. The total is recalculated on the server.
                 </p>
               </div>
             </div>

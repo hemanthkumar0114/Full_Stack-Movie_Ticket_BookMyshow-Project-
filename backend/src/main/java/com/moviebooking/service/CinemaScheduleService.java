@@ -4,81 +4,73 @@ import com.moviebooking.dto.CinemaShowtimeDTO;
 import com.moviebooking.dto.ShowtimeChipDTO;
 import com.moviebooking.entity.Cinema;
 import com.moviebooking.entity.Showtime;
-import com.moviebooking.repository.CinemaRepository;
 import com.moviebooking.repository.ShowtimeRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CinemaScheduleService {
 
-    @Autowired
-    private ShowtimeRepository showtimeRepository;
+    private static final String DEFAULT_STATUS = "AVAILABLE";
 
-    @Autowired
-    private CinemaRepository cinemaRepository;
+    private final ShowtimeRepository showtimeRepository;
+    private final Clock clock;
+
+    public CinemaScheduleService(ShowtimeRepository showtimeRepository, Clock clock) {
+        this.showtimeRepository = showtimeRepository;
+        this.clock = clock;
+    }
 
     @Transactional(readOnly = true)
-    public List<CinemaShowtimeDTO> getCinemasWithShowtimes(Long movieId, String city, String dateStr) {
-        String queryCity = (city == null || city.trim().isEmpty()) ? "Mumbai" : city.trim();
+    public List<CinemaShowtimeDTO> getCinemasWithShowtimes(Long movieId, String city, LocalDate date) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        String queryCity = (city == null || city.isBlank()) ? "Mumbai" : city.trim();
+
         List<Showtime> showtimes;
-
-        if (dateStr != null && !dateStr.trim().isEmpty()) {
-            try {
-                LocalDate date = LocalDate.parse(dateStr.trim(), DateTimeFormatter.ISO_LOCAL_DATE);
-                LocalDateTime startOfDay = date.atStartOfDay();
-                LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
-                showtimes = showtimeRepository.findShowtimesByMovieCityDate(movieId, queryCity, startOfDay, endOfDay);
-            } catch (Exception e) {
-                showtimes = showtimeRepository.findShowtimesByMovieCity(movieId, queryCity);
-            }
+        if (date != null) {
+            LocalDateTime from = date.atStartOfDay().isBefore(now) ? now : date.atStartOfDay();
+            LocalDateTime to = date.plusDays(1).atStartOfDay();
+            showtimes = from.isBefore(to)
+                    ? showtimeRepository.findShowtimesByMovieCityBetween(movieId, queryCity, from, to)
+                    : List.of();
         } else {
-            showtimes = showtimeRepository.findShowtimesByMovieCity(movieId, queryCity);
+            showtimes = showtimeRepository.findUpcomingShowtimesByMovieCity(movieId, queryCity, now);
         }
 
-        // If no showtimes in specified city, fallback to all showtimes for this movie
-        if (showtimes.isEmpty()) {
-            showtimes = showtimeRepository.findByMovieId(movieId);
-        }
-
-        // Group showtimes by Cinema
-        Map<Cinema, List<Showtime>> grouped = showtimes.stream()
+        Map<Cinema, List<Showtime>> byCinema = showtimes.stream()
                 .collect(Collectors.groupingBy(st -> st.getScreen().getCinema(), LinkedHashMap::new, Collectors.toList()));
 
         List<CinemaShowtimeDTO> result = new ArrayList<>();
-        for (Map.Entry<Cinema, List<Showtime>> entry : grouped.entrySet()) {
-            Cinema cinema = entry.getKey();
-            List<Showtime> cinemaShowtimes = entry.getValue();
-
-            CinemaShowtimeDTO cinemaDTO = new CinemaShowtimeDTO();
-            cinemaDTO.setCinemaId(cinema.getId());
-            cinemaDTO.setName(cinema.getName());
-            cinemaDTO.setBrand(cinema.getBrand());
-            cinemaDTO.setCity(cinema.getCity());
-            cinemaDTO.setLocationAddress(cinema.getLocationAddress());
-            cinemaDTO.setFacilities(cinema.getFacilities());
-
-            List<ShowtimeChipDTO> chips = cinemaShowtimes.stream().map(st -> new ShowtimeChipDTO(
-                    st.getId(),
-                    st.getStartTime(),
-                    st.getFormatType(),
-                    st.getScreen().getScreenName(),
-                    st.getScreen().getSoundType(),
-                    st.getStatus() != null ? st.getStatus() : "AVAILABLE"
-            )).collect(Collectors.toList());
-
-            cinemaDTO.setShowtimes(chips);
-            result.add(cinemaDTO);
-        }
-
+        byCinema.forEach((cinema, cinemaShowtimes) -> result.add(toCinemaDto(cinema, cinemaShowtimes)));
         return result;
+    }
+
+    private CinemaShowtimeDTO toCinemaDto(Cinema cinema, List<Showtime> cinemaShowtimes) {
+        CinemaShowtimeDTO dto = new CinemaShowtimeDTO();
+        dto.setCinemaId(cinema.getId());
+        dto.setName(cinema.getName());
+        dto.setBrand(cinema.getBrand());
+        dto.setCity(cinema.getCity());
+        dto.setLocationAddress(cinema.getLocationAddress());
+        dto.setFacilities(cinema.getFacilities());
+        dto.setShowtimes(cinemaShowtimes.stream()
+                .map(st -> new ShowtimeChipDTO(
+                        st.getId(),
+                        st.getStartTime(),
+                        st.getFormatType(),
+                        st.getScreen().getScreenName(),
+                        st.getScreen().getSoundType(),
+                        st.getStatus() != null ? st.getStatus() : DEFAULT_STATUS))
+                .toList());
+        return dto;
     }
 }

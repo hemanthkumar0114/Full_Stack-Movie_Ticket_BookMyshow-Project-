@@ -1,40 +1,33 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useCity } from "../context/CityContext";
+import { useCity } from "../hooks/useCity";
+import { useAuth } from "../hooks/useAuth";
+import { useAsync } from "../hooks/useAsync";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { api } from "../services/api";
+
+const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=120&q=80";
 
 function Navbar() {
   const { selectedCity, setIsCityModalOpen } = useCity();
+  const { user, isAuthenticated, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    if (searchQuery.trim().length >= 2) {
-      setIsSearching(true);
-      const timer = setTimeout(() => {
-        api.searchMovies(searchQuery)
-          .then((data) => {
-            setSearchResults(data || []);
-            setShowDropdown(true);
-            setIsSearching(false);
-          })
-          .catch(() => {
-            setIsSearching(false);
-          });
-      }, 250);
-      return () => clearTimeout(timer);
-    } else {
-      setSearchResults([]);
-      setShowDropdown(false);
-    }
-  }, [searchQuery]);
+  const debouncedQuery = useDebouncedValue(searchQuery.trim(), 250);
+  const canSearch = debouncedQuery.length >= 2;
 
-  // Close search dropdown on click outside
+  const { data: results, loading: isSearching } = useAsync(
+    () => (canSearch ? api.searchMovies(debouncedQuery) : Promise.resolve([])),
+    [debouncedQuery],
+    { keepPreviousData: true }
+  );
+
+  const searchResults = canSearch && Array.isArray(results) ? results : [];
+
   useEffect(() => {
     function handleClickOutside(e) {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -51,9 +44,13 @@ function Navbar() {
     navigate(`/movie/${movieId}`);
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
+
   return (
     <header className="bms-header">
-      {/* Primary Top Bar */}
       <div className="bms-nav-primary">
         <div className="bms-nav-left">
           <Link to="/" className="bms-logo">
@@ -61,43 +58,44 @@ function Navbar() {
             <span className="bms-logo-text">book<span className="bms-logo-red">my</span>show</span>
           </Link>
 
-          {/* Search Bar */}
           <div className="bms-search-container" ref={searchRef}>
             <span className="bms-search-icon">🔍</span>
             <input
-              type="text"
-              placeholder="Search for Movies, Events, Plays, Sports and Activities"
+              type="search"
+              aria-label="Search movies"
+              placeholder="Search for Movies"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => searchQuery.length >= 2 && setShowDropdown(true)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
             />
-            {isSearching && <span className="bms-search-spinner">⏳</span>}
+            {canSearch && isSearching && <span className="bms-search-spinner">⏳</span>}
 
-            {/* Live Autocomplete Dropdown */}
             {showDropdown && searchResults.length > 0 && (
               <div className="bms-search-dropdown">
                 {searchResults.map((m) => (
-                  <div
+                  <button
+                    type="button"
                     key={m.id}
                     className="bms-search-item"
                     onClick={() => handleSelectMovie(m.id)}
                   >
                     <img
-                      src={m.posterUrl || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=120&q=80"}
-                      alt={m.title}
+                      src={m.posterUrl || FALLBACK_POSTER}
+                      alt=""
                       className="bms-search-thumb"
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=120&q=80";
+                        e.target.src = FALLBACK_POSTER;
                       }}
                     />
                     <div className="bms-search-info">
                       <h4>{m.title}</h4>
-                      <p>
-                        <span>★ {m.rating}</span> • <span>{Array.isArray(m.genres) ? m.genres.join(", ") : m.genres || "Action"}</span>
-                      </p>
+                      <p>{Array.isArray(m.genres) ? m.genres.join(", ") : m.genres}</p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -105,8 +103,8 @@ function Navbar() {
         </div>
 
         <div className="bms-nav-right">
-          {/* City Picker Dropdown */}
           <button
+            type="button"
             className="bms-city-btn"
             onClick={() => setIsCityModalOpen(true)}
             title="Change City"
@@ -115,14 +113,24 @@ function Navbar() {
             <span className="city-arrow">▾</span>
           </button>
 
-          {/* History / My Bookings */}
-          <Link to="/history" className="bms-history-btn">
-            <span>🎟️ My Bookings</span>
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <Link to="/history" className="bms-history-btn">
+                <span>🎟️ My Bookings</span>
+              </Link>
+              <span className="bms-user-name">Hi, {user?.name?.split(" ")[0]}</span>
+              <button type="button" className="bms-auth-btn" onClick={handleLogout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <Link to="/login" state={{ from: { pathname: location.pathname } }} className="bms-auth-btn">
+              Sign in
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Secondary Categories Bar */}
       <div className="bms-nav-secondary">
         <div className="bms-nav-links-left">
           <Link to="/" className={location.pathname === "/" ? "active" : ""}>
