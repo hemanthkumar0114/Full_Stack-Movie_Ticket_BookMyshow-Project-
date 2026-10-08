@@ -1,11 +1,11 @@
-function CheckoutTray({ selectedSeats = [], onProceed, isLocking }) {
+import { formatCurrency } from "../utils/formatters";
+
+function CheckoutTray({ selectedSeats = [], convenienceFee = 0, onProceed, isLocking }) {
   if (selectedSeats.length === 0) return null;
 
-  const ticketSubtotal = selectedSeats.reduce((acc, seat) => acc + Number(seat.price), 0);
-  const convenienceFee = 35.0;
+  const ticketSubtotal = selectedSeats.reduce((total, seat) => total + Number(seat.price), 0);
   const totalAmount = ticketSubtotal + convenienceFee;
-
-  const seatCodes = selectedSeats.map((s) => s.seatCode).join(", ");
+  const seatCodes = selectedSeats.map((seat) => seat.seatCode).join(", ");
 
   return (
     <div className="bms-checkout-tray">
@@ -21,9 +21,9 @@ function CheckoutTray({ selectedSeats = [], onProceed, isLocking }) {
               <strong>{seatCodes}</strong>
             </div>
             <div className="tray-breakdown">
-              <span>Tickets: ₹{ticketSubtotal.toFixed(2)}</span>
+              <span>Tickets: {formatCurrency(ticketSubtotal)}</span>
               <span className="divider">•</span>
-              <span>Convenience Fee: ₹{convenienceFee.toFixed(2)}</span>
+              <span>Convenience fee: {formatCurrency(convenienceFee)}</span>
             </div>
           </div>
         </div>
@@ -31,15 +31,11 @@ function CheckoutTray({ selectedSeats = [], onProceed, isLocking }) {
         <div className="tray-right">
           <div className="tray-total-box">
             <span className="total-label">Total Payable</span>
-            <span className="total-amount">₹{totalAmount.toFixed(2)}</span>
+            <span className="total-amount">{formatCurrency(totalAmount)}</span>
           </div>
 
-          <button
-            className="tray-pay-btn"
-            onClick={onProceed}
-            disabled={isLocking}
-          >
-            {isLocking ? "Holding Seats..." : `Proceed to Pay (₹${totalAmount.toFixed(2)})`}
+          <button type="button" className="tray-pay-btn" onClick={onProceed} disabled={isLocking}>
+            {isLocking ? "Holding seats..." : `Proceed to pay (${formatCurrency(totalAmount)})`}
           </button>
         </div>
       </div>

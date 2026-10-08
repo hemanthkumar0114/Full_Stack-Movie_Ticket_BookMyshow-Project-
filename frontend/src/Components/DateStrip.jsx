@@ -1,5 +1,6 @@
+import { toIsoDate } from "../utils/formatters";
+
 function DateStrip({ selectedDate, onDateChange }) {
-  // Generate 7 consecutive days starting today
   const days = [];
   const today = new Date();
 
@@ -7,10 +8,7 @@ function DateStrip({ selectedDate, onDateChange }) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
 
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const isoDate = `${year}-${month}-${day}`;
+    const isoDate = toIsoDate(d);
 
     const dayName = i === 0 ? "TODAY" : i === 1 ? "TOM" : d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
     const dateNum = d.getDate();

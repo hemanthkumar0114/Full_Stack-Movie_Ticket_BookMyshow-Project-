@@ -7,5 +7,6 @@ public record SeatLockResponse(
         boolean success,
         String message,
         LocalDateTime lockExpiresAt,
+        long expiresInSeconds,
         List<Long> lockedSeatIds) {
 }

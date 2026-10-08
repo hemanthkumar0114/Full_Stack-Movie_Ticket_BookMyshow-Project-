@@ -1,157 +1,107 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import HeroBanner from "../Components/HeroBanner";
 import MovieCard from "../Components/MovieCard";
 import TrailerModal from "../Components/TrailerModal";
+import LoadingState from "../Components/LoadingState";
+import ErrorState from "../Components/ErrorState";
+import { useAsync } from "../hooks/useAsync";
 import { api } from "../services/api";
 
-function Home() {
-  const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const CATEGORIES = [
+  { key: "all", label: "🔥 All Movies" },
+  { key: "now_showing", label: "🎬 Now Showing" },
+  { key: "upcoming", label: "⚡ Upcoming Releases" },
+  { key: "top_rated", label: "⭐ Top Rated" },
+  { key: "trending", label: "🚀 Trending" }
+];
 
-  // Category Tab: "all", "now_showing", "upcoming", "top_rated", "trending"
+const LANGUAGES = ["ALL", "Hindi", "Telugu", "Tamil", "Malayalam", "Kannada"];
+const GENRES = ["ALL", "Action", "Sci-Fi", "Comedy", "Thriller", "Horror", "Drama", "Mythology"];
+
+const SECTION_TITLES = {
+  upcoming: "Upcoming Blockbusters",
+  top_rated: "Top Rated Cinema"
+};
+
+const joinList = (value) => (Array.isArray(value) ? value.join(" ") : value || "");
+
+function Home() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedLanguage, setSelectedLanguage] = useState("ALL");
   const [selectedGenre, setSelectedGenre] = useState("ALL");
+  const [trailer, setTrailer] = useState(null);
 
-  // Trailer Modal State
-  const [trailerModal, setTrailerModal] = useState({
-    isOpen: false,
-    trailerUrl: "",
-    movieTitle: ""
-  });
+  const { data, error, loading, retry } = useAsync(
+    () => api.getNowPlayingMovies(activeCategory),
+    [activeCategory],
+    { keepPreviousData: true }
+  );
 
-  useEffect(() => {
-    setLoading(true);
-    api.getNowPlayingMovies(activeCategory)
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setMovies(data);
-        } else {
-          setMovies([]);
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error loading movies:", err);
-        setError("Unable to connect to movie catalog service.");
-        setLoading(false);
-      });
-  }, [activeCategory]);
+  const movies = Array.isArray(data) ? data : [];
 
-  const openTrailer = (url, title) => {
-    setTrailerModal({
-      isOpen: true,
-      trailerUrl: url,
-      movieTitle: title
-    });
-  };
-
-  const closeTrailer = () => {
-    setTrailerModal({
-      isOpen: false,
-      trailerUrl: "",
-      movieTitle: ""
-    });
-  };
-
-  // Indian Languages & Genres
-  const languages = ["ALL", "Hindi", "Telugu", "Tamil", "Malayalam", "Kannada"];
-  const genres = ["ALL", "Action", "Sci-Fi", "Comedy", "Thriller", "Horror", "Drama", "Mythology"];
-
-  const filteredMovies = movies.filter((m) => {
-    const langStr = Array.isArray(m.languages) ? m.languages.join(" ") : m.languages || "";
-    const langMatch =
+  const filteredMovies = movies.filter((movie) => {
+    const languageMatch =
       selectedLanguage === "ALL" ||
-      langStr.toLowerCase().includes(selectedLanguage.toLowerCase());
-
-    const genreStr = Array.isArray(m.genres) ? m.genres.join(" ") : m.genres || "";
+      joinList(movie.languages).toLowerCase().includes(selectedLanguage.toLowerCase());
     const genreMatch =
       selectedGenre === "ALL" ||
-      genreStr.toLowerCase().includes(selectedGenre.toLowerCase());
-
-    return langMatch && genreMatch;
+      joinList(movie.genres).toLowerCase().includes(selectedGenre.toLowerCase());
+    return languageMatch && genreMatch;
   });
 
-  // Top trending movies for Hero Carousel
-  const heroMovies = movies.slice(0, 4);
+  const resetFilters = () => {
+    setSelectedLanguage("ALL");
+    setSelectedGenre("ALL");
+  };
 
   return (
     <div className="bms-home-page">
-      {/* Top Full-Width Hero Banner Slider */}
-      <HeroBanner movies={heroMovies} onWatchTrailer={openTrailer} />
+      <HeroBanner
+        movies={movies.slice(0, 4)}
+        onWatchTrailer={(url, title) => setTrailer({ url, title })}
+      />
 
-      {/* Main Movies Section */}
       <main className="bms-main-container">
-        {/* Category Sub-Navigation Tab Bar */}
         <div className="bms-category-tabs-bar">
-          <button
-            className={`cat-tab-btn ${activeCategory === "all" ? "active" : ""}`}
-            onClick={() => setActiveCategory("all")}
-          >
-            🔥 All Movies
-          </button>
-          <button
-            className={`cat-tab-btn ${activeCategory === "now_showing" ? "active" : ""}`}
-            onClick={() => setActiveCategory("now_showing")}
-          >
-            🎬 Now Showing
-          </button>
-          <button
-            className={`cat-tab-btn ${activeCategory === "upcoming" ? "active" : ""}`}
-            onClick={() => setActiveCategory("upcoming")}
-          >
-            ⚡ Upcoming Releases
-          </button>
-          <button
-            className={`cat-tab-btn ${activeCategory === "top_rated" ? "active" : ""}`}
-            onClick={() => setActiveCategory("top_rated")}
-          >
-            ⭐ Top Rated
-          </button>
-          <button
-            className={`cat-tab-btn ${activeCategory === "trending" ? "active" : ""}`}
-            onClick={() => setActiveCategory("trending")}
-          >
-            🚀 Trending
-          </button>
+          {CATEGORIES.map((category) => (
+            <button
+              type="button"
+              key={category.key}
+              className={`cat-tab-btn ${activeCategory === category.key ? "active" : ""}`}
+              onClick={() => setActiveCategory(category.key)}
+            >
+              {category.label}
+            </button>
+          ))}
         </div>
 
         <div className="bms-section-header">
           <div className="section-title-group">
-            <h2>
-              {activeCategory === "upcoming"
-                ? "Upcoming Blockbusters"
-                : activeCategory === "top_rated"
-                ? "Top Rated Cinema"
-                : "Now Showing in Cinemas"}
-            </h2>
-            <p>
-              Showing {filteredMovies.length} movies available for instant ticket booking
-            </p>
+            <h2>{SECTION_TITLES[activeCategory] || "Now Showing in Cinemas"}</h2>
+            <p>Showing {filteredMovies.length} movies available for instant ticket booking</p>
           </div>
 
-          {/* Language Filter Pills */}
           <div className="bms-catalog-filters">
             <div className="filter-pill-group">
-              {languages.map((lang) => (
+              {LANGUAGES.map((language) => (
                 <button
-                  key={lang}
-                  className={`lang-pill ${selectedLanguage === lang ? "active" : ""}`}
-                  onClick={() => setSelectedLanguage(lang)}
+                  type="button"
+                  key={language}
+                  className={`lang-pill ${selectedLanguage === language ? "active" : ""}`}
+                  onClick={() => setSelectedLanguage(language)}
                 >
-                  {lang}
+                  {language}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Genre Tags */}
         <div className="genre-tags-bar">
           <span className="genre-label">Genres:</span>
-          {genres.map((genre) => (
+          {GENRES.map((genre) => (
             <button
+              type="button"
               key={genre}
               className={`genre-tag ${selectedGenre === genre ? "active" : ""}`}
               onClick={() => setSelectedGenre(genre)}
@@ -161,20 +111,14 @@ function Home() {
           ))}
         </div>
 
-        {/* Loading / Error / Movie Cards Grid */}
-        {loading ? (
-          <div className="bms-loading-screen">
-            <div className="bms-spinner"></div>
-            <h2>Loading Movies Catalog...</h2>
-          </div>
+        {loading && movies.length === 0 ? (
+          <LoadingState title="Loading Movies Catalog..." />
         ) : error ? (
-          <div className="bms-error-screen">
-            <h2>⚠️ Service Notice</h2>
-            <p>{error}</p>
-            <button onClick={() => window.location.reload()} className="bms-retry-btn">
-              Retry
-            </button>
-          </div>
+          <ErrorState
+            title="Unable to load movies"
+            message={error.message}
+            onRetry={retry}
+          />
         ) : (
           <div className="bms-movies-grid">
             {filteredMovies.map((movie) => (
@@ -183,13 +127,7 @@ function Home() {
             {filteredMovies.length === 0 && (
               <div className="no-movies-found">
                 <p>No movies match the selected filters ({selectedLanguage}, {selectedGenre}).</p>
-                <button
-                  onClick={() => {
-                    setSelectedLanguage("ALL");
-                    setSelectedGenre("ALL");
-                  }}
-                  className="reset-filters-btn"
-                >
+                <button type="button" onClick={resetFilters} className="reset-filters-btn">
                   Reset Filters
                 </button>
               </div>
@@ -197,7 +135,6 @@ function Home() {
           </div>
         )}
 
-        {/* Stream & Premiere Banner */}
         <div className="bms-promo-banner">
           <div className="promo-badge">BOOKMYSHOW STREAM</div>
           <h3>Endless Entertainment Anytime. Rent or Buy Indian blockbusters.</h3>
@@ -205,12 +142,11 @@ function Home() {
         </div>
       </main>
 
-      {/* Video Trailer Modal */}
       <TrailerModal
-        isOpen={trailerModal.isOpen}
-        onClose={closeTrailer}
-        trailerUrl={trailerModal.trailerUrl}
-        movieTitle={trailerModal.movieTitle}
+        isOpen={Boolean(trailer)}
+        onClose={() => setTrailer(null)}
+        trailerUrl={trailer?.url || ""}
+        movieTitle={trailer?.title || ""}
       />
     </div>
   );

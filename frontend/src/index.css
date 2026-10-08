@@ -2491,3 +2491,93 @@ input {
   .bms-checkout-tray { padding: 12px 16px; }
   .cities-list { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   10. AUTH, FORM FEEDBACK AND MOBILE REFINEMENTS
+   ========================================================================== */
+.bms-auth-page {
+  min-height: calc(100vh - 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: var(--bms-bg-light);
+}
+
+.bms-auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 32px 28px;
+}
+
+.bms-auth-card h1 { font-size: 24px; margin-bottom: 4px; color: var(--text-dark); }
+.bms-auth-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
+.bms-auth-submit { width: 100%; margin-top: 8px; }
+.bms-auth-switch { margin-top: 18px; text-align: center; font-size: 14px; color: var(--text-muted); }
+.bms-auth-switch a { color: var(--bms-red); font-weight: 600; }
+
+.bms-auth-btn {
+  background: var(--bms-red);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.bms-auth-btn:hover { background: var(--bms-red-hover); }
+.bms-user-name { font-size: 14px; font-weight: 500; color: var(--text-dark); white-space: nowrap; }
+
+.bms-search-item {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.field-error { color: var(--status-almost-full); font-size: 12px; margin-top: 4px; }
+.input-error { border-color: var(--status-almost-full) !important; }
+
+.bms-inline-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  margin: 12px 0;
+}
+.bms-inline-alert.error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+.bms-inline-alert.info { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+.bms-inline-alert.success { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+.bms-inline-alert-close { background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; }
+
+.bms-slow-hint { margin-top: 12px; font-size: 13px; color: var(--text-muted); max-width: 360px; text-align: center; }
+.booking-as { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+
+@media (max-width: 900px) {
+  .bms-nav-primary { flex-wrap: wrap; gap: 10px; }
+  .bms-nav-left { flex: 1 1 100%; flex-wrap: wrap; gap: 10px; }
+  .bms-search-container { flex: 1 1 100%; max-width: none; }
+  .bms-nav-right { width: 100%; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+  .bms-date-strip, .bms-filter-bar { padding-left: 16px; padding-right: 16px; overflow-x: auto; }
+  .history-tickets-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .bms-auth-card { padding: 24px 18px; }
+  .payment-modal-content { padding: 16px; max-height: 94vh; overflow-y: auto; }
+  .seat-row { gap: 4px; }
+  .row-seats { flex-wrap: wrap; gap: 4px; }
+  .seat-btn { width: 28px; height: 28px; font-size: 11px; }
+  .filter-group { flex-direction: column; align-items: flex-start; }
+  .filter-chips { flex-wrap: wrap; }
+}

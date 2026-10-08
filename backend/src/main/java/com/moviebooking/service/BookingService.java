@@ -85,6 +85,7 @@ public class BookingService {
         return new SeatLockResponse(true,
                 "Seats held for " + properties.lockMinutes() + " minutes.",
                 lockExpiry,
+                properties.lockMinutes() * 60L,
                 seatIds);
     }
 
