@@ -1,5 +1,6 @@
 package com.moviebooking.service;
 
+import com.moviebooking.config.BookingProperties;
 import com.moviebooking.dto.SeatStatusDTO;
 import com.moviebooking.dto.SeatTierDTO;
 import com.moviebooking.dto.ShowtimeSeatMapDTO;
@@ -10,87 +11,84 @@ import com.moviebooking.exception.ResourceNotFoundException;
 import com.moviebooking.repository.SeatRepository;
 import com.moviebooking.repository.ShowtimeRepository;
 import com.moviebooking.repository.ShowtimeSeatRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class SeatService {
 
-    @Autowired
-    private ShowtimeRepository showtimeRepository;
+    private static final String AVAILABLE = "AVAILABLE";
+    private static final String LOCKED = "LOCKED";
+    private static final String BOOKED = "BOOKED";
 
-    @Autowired
-    private SeatRepository seatRepository;
+    private static final List<String> TIER_ORDER = List.of("RECLINER", "PRIME", "CLASSIC");
 
-    @Autowired
-    private ShowtimeSeatRepository showtimeSeatRepository;
+    private final ShowtimeRepository showtimeRepository;
+    private final SeatRepository seatRepository;
+    private final ShowtimeSeatRepository showtimeSeatRepository;
+    private final BookingProperties properties;
+    private final Clock clock;
 
-    @Transactional
-    public ShowtimeSeatMapDTO getSeatMapForShowtime(Long showtimeId, String sessionId) {
+    public SeatService(ShowtimeRepository showtimeRepository,
+                       SeatRepository seatRepository,
+                       ShowtimeSeatRepository showtimeSeatRepository,
+                       BookingProperties properties,
+                       Clock clock) {
+        this.showtimeRepository = showtimeRepository;
+        this.seatRepository = seatRepository;
+        this.showtimeSeatRepository = showtimeSeatRepository;
+        this.properties = properties;
+        this.clock = clock;
+    }
+
+    @Transactional(readOnly = true)
+    public ShowtimeSeatMapDTO getSeatMapForShowtime(Long showtimeId, Long currentUserId) {
         Showtime showtime = showtimeRepository.findById(showtimeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Showtime not found: " + showtimeId));
 
-        Long screenId = showtime.getScreen().getId();
-        List<Seat> screenSeats = seatRepository.findByScreenIdOrderByRowNameAscSeatNumberAsc(screenId);
+        List<Seat> screenSeats = seatRepository.findByScreenIdOrderByRowNameAscSeatNumberAsc(showtime.getScreen().getId());
+        Map<Long, ShowtimeSeat> showtimeSeatBySeatId = showtimeSeatRepository.findByShowtimeId(showtimeId).stream()
+                .collect(Collectors.toMap(ss -> ss.getSeat().getId(), Function.identity()));
 
-        // Fetch or create showtime seats
-        List<ShowtimeSeat> showtimeSeats = showtimeSeatRepository.findByShowtimeId(showtimeId);
-        Map<Long, ShowtimeSeat> seatStatusMap = showtimeSeats.stream()
-                .collect(Collectors.toMap(ss -> ss.getSeat().getId(), ss -> ss));
-
-        // Group into Tiers: RECLINER, PRIME, CLASSIC
-        SeatTierDTO reclinerTier = new SeatTierDTO("RECLINER", "👑 Recliner (₹450.00)", new BigDecimal("450.00"));
-        SeatTierDTO primeTier = new SeatTierDTO("PRIME", "⭐ Prime (₹280.00)", new BigDecimal("280.00"));
-        SeatTierDTO classicTier = new SeatTierDTO("CLASSIC", "🎬 Classic (₹180.00)", new BigDecimal("180.00"));
-
-        int totalSeats = screenSeats.size();
+        LocalDateTime now = LocalDateTime.now(clock);
+        Map<String, SeatTierDTO> tiers = new LinkedHashMap<>();
         int availableCount = 0;
 
         for (Seat seat : screenSeats) {
-            ShowtimeSeat ss = seatStatusMap.get(seat.getId());
-            String status = "AVAILABLE";
-            boolean isLockedByMe = false;
+            ShowtimeSeat showtimeSeat = showtimeSeatBySeatId.get(seat.getId());
+            String status = resolveStatus(showtimeSeat, now);
+            boolean lockedByMe = LOCKED.equals(status)
+                    && currentUserId != null
+                    && currentUserId.equals(showtimeSeat.getLockedByUserId());
 
-            if (ss != null) {
-                if ("BOOKED".equalsIgnoreCase(ss.getStatus())) {
-                    status = "BOOKED";
-                } else if ("LOCKED".equalsIgnoreCase(ss.getStatus())) {
-                    if (ss.getLockedUntil() != null && ss.getLockedUntil().isAfter(LocalDateTime.now())) {
-                        status = "LOCKED";
-                        if (sessionId != null && sessionId.equals(ss.getLockedBySession())) {
-                            isLockedByMe = true;
-                        }
-                    }
-                }
-            }
-
-            if ("AVAILABLE".equals(status) || isLockedByMe) {
+            if (AVAILABLE.equals(status) || lockedByMe) {
                 availableCount++;
             }
 
-            SeatStatusDTO seatDTO = new SeatStatusDTO();
-            seatDTO.setSeatId(seat.getId());
-            seatDTO.setRowName(seat.getRowName());
-            seatDTO.setSeatNumber(seat.getSeatNumber());
-            seatDTO.setSeatCode(seat.getRowName() + seat.getSeatNumber());
-            seatDTO.setTierCategory(seat.getTierCategory());
-            seatDTO.setPrice(seat.getBasePrice());
-            seatDTO.setStatus(status);
-            seatDTO.setIsLockedByMe(isLockedByMe);
+            SeatStatusDTO seatDto = new SeatStatusDTO();
+            seatDto.setSeatId(seat.getId());
+            seatDto.setRowName(seat.getRowName());
+            seatDto.setSeatNumber(seat.getSeatNumber());
+            seatDto.setSeatCode(seat.getRowName() + seat.getSeatNumber());
+            seatDto.setTierCategory(seat.getTierCategory());
+            seatDto.setPrice(seat.getBasePrice());
+            seatDto.setStatus(status);
+            seatDto.setIsLockedByMe(lockedByMe);
 
-            if ("RECLINER".equalsIgnoreCase(seat.getTierCategory())) {
-                reclinerTier.getSeats().add(seatDTO);
-            } else if ("PRIME".equalsIgnoreCase(seat.getTierCategory())) {
-                primeTier.getSeats().add(seatDTO);
-            } else {
-                classicTier.getSeats().add(seatDTO);
-            }
+            String tierName = seat.getTierCategory() == null ? "CLASSIC" : seat.getTierCategory().toUpperCase();
+            tiers.computeIfAbsent(tierName, name -> newTier(name, seat.getBasePrice()))
+                    .getSeats().add(seatDto);
         }
 
         ShowtimeSeatMapDTO response = new ShowtimeSeatMapDTO();
@@ -102,15 +100,41 @@ public class SeatService {
         response.setScreenName(showtime.getScreen().getScreenName());
         response.setFormatType(showtime.getFormatType());
         response.setStartTime(showtime.getStartTime());
-        response.setTotalSeats(totalSeats);
+        response.setTotalSeats(screenSeats.size());
         response.setAvailableSeats(availableCount);
-
-        List<SeatTierDTO> activeTiers = new ArrayList<>();
-        if (!reclinerTier.getSeats().isEmpty()) activeTiers.add(reclinerTier);
-        if (!primeTier.getSeats().isEmpty()) activeTiers.add(primeTier);
-        if (!classicTier.getSeats().isEmpty()) activeTiers.add(classicTier);
-
-        response.setTiers(activeTiers);
+        response.setConvenienceFee(properties.convenienceFee());
+        response.setMaxSeatsPerBooking(properties.maxSeatsPerBooking());
+        response.setLockMinutes(properties.lockMinutes());
+        response.setTiers(sortTiers(tiers));
         return response;
+    }
+
+    private String resolveStatus(ShowtimeSeat showtimeSeat, LocalDateTime now) {
+        if (showtimeSeat == null) {
+            return AVAILABLE;
+        }
+        if (BOOKED.equalsIgnoreCase(showtimeSeat.getStatus())) {
+            return BOOKED;
+        }
+        boolean holdIsActive = LOCKED.equalsIgnoreCase(showtimeSeat.getStatus())
+                && showtimeSeat.getLockedUntil() != null
+                && showtimeSeat.getLockedUntil().isAfter(now);
+        return holdIsActive ? LOCKED : AVAILABLE;
+    }
+
+    private SeatTierDTO newTier(String tierName, BigDecimal price) {
+        String displayName = tierName.charAt(0) + tierName.substring(1).toLowerCase();
+        return new SeatTierDTO(tierName, displayName + " (₹" + price.setScale(2, RoundingMode.HALF_UP) + ")", price);
+    }
+
+    private List<SeatTierDTO> sortTiers(Map<String, SeatTierDTO> tiers) {
+        List<SeatTierDTO> sorted = new ArrayList<>();
+        for (String name : TIER_ORDER) {
+            if (tiers.containsKey(name)) {
+                sorted.add(tiers.remove(name));
+            }
+        }
+        sorted.addAll(tiers.values());
+        return sorted;
     }
 }

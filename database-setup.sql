@@ -10,6 +10,7 @@ USE bookmyshow_db;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS booking_items;
 DROP TABLE IF EXISTS bookings;
+DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS showtime_seats;
 DROP TABLE IF EXISTS seats;
 DROP TABLE IF EXISTS showtimes;
@@ -85,16 +86,27 @@ CREATE TABLE showtime_seats (
     seat_id BIGINT NOT NULL,
     status VARCHAR(50) DEFAULT 'AVAILABLE',
     locked_until DATETIME NULL,
-    locked_by_session VARCHAR(100) NULL,
+    locked_by_user_id BIGINT NULL,
     FOREIGN KEY (showtime_id) REFERENCES showtimes(id) ON DELETE CASCADE,
     FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE,
     UNIQUE KEY unique_showtime_seat (showtime_id, seat_id)
 );
 
--- 7. BOOKINGS TABLE
+-- 7. USERS TABLE
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone VARCHAR(20),
+    password_hash VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 8. BOOKINGS TABLE
 CREATE TABLE bookings (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_code VARCHAR(50) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
     user_name VARCHAR(255) NOT NULL,
     user_email VARCHAR(255) NOT NULL,
     user_phone VARCHAR(50),
@@ -102,10 +114,11 @@ CREATE TABLE bookings (
     convenience_fee DECIMAL(10, 2) NOT NULL DEFAULT 35.00,
     payment_method VARCHAR(50) DEFAULT 'UPI / Credit Card',
     booking_status VARCHAR(50) DEFAULT 'CONFIRMED',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- 8. BOOKING ITEMS TABLE
+-- 9. BOOKING ITEMS TABLE
 CREATE TABLE booking_items (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     booking_id BIGINT NOT NULL,
@@ -114,7 +127,8 @@ CREATE TABLE booking_items (
     price DECIMAL(10, 2) NOT NULL,
     FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
     FOREIGN KEY (showtime_id) REFERENCES showtimes(id) ON DELETE CASCADE,
-    FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE
+    FOREIGN KEY (seat_id) REFERENCES seats(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_booking_items_showtime_seat (showtime_id, seat_id)
 );
 
 -- =======================================================
@@ -262,75 +276,75 @@ CROSS JOIN (
     SELECT 10
 ) n;
 
--- 5. Insert Showtimes across multiple days starting TODAY (2026-08-16)
+-- 5. Insert Showtimes for today and the next two days (dates are relative to the day this script runs)
 INSERT INTO showtimes (id, movie_id, screen_id, start_time, format_type, status) VALUES
--- TODAY: 2026-08-16
-(1, 1, 1, '2026-08-16 10:30:00', 'IMAX 2D', 'AVAILABLE'),
-(2, 1, 1, '2026-08-16 14:15:00', 'IMAX 2D', 'FAST_FILLING'),
-(3, 1, 1, '2026-08-16 18:00:00', 'IMAX 2D', 'ALMOST_FULL'),
-(4, 1, 1, '2026-08-16 21:45:00', 'IMAX 2D', 'AVAILABLE'),
-(5, 1, 2, '2026-08-16 11:00:00', '2D Dolby Atmos', 'AVAILABLE'),
-(6, 1, 2, '2026-08-16 15:30:00', '2D Dolby Atmos', 'FAST_FILLING'),
-(7, 1, 3, '2026-08-16 13:00:00', 'IMAX 2D', 'AVAILABLE'),
-(8, 1, 3, '2026-08-16 17:30:00', 'IMAX 2D', 'ALMOST_FULL'),
-(9, 1, 5, '2026-08-16 12:45:00', '4DX 3D', 'AVAILABLE'),
-(10, 1, 5, '2026-08-16 16:30:00', '4DX 3D', 'FAST_FILLING'),
+-- TODAY
+(1, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '10:30:00'), 'IMAX 2D', 'AVAILABLE'),
+(2, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '14:15:00'), 'IMAX 2D', 'FAST_FILLING'),
+(3, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '18:00:00'), 'IMAX 2D', 'ALMOST_FULL'),
+(4, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '21:45:00'), 'IMAX 2D', 'AVAILABLE'),
+(5, 1, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '11:00:00'), '2D Dolby Atmos', 'AVAILABLE'),
+(6, 1, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '15:30:00'), '2D Dolby Atmos', 'FAST_FILLING'),
+(7, 1, 3, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '13:00:00'), 'IMAX 2D', 'AVAILABLE'),
+(8, 1, 3, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '17:30:00'), 'IMAX 2D', 'ALMOST_FULL'),
+(9, 1, 5, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '12:45:00'), '4DX 3D', 'AVAILABLE'),
+(10, 1, 5, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '16:30:00'), '4DX 3D', 'FAST_FILLING'),
 
--- The Dark Knight (Movie 2) on 2026-08-16
-(11, 2, 1, '2026-08-16 11:30:00', 'IMAX 2D', 'AVAILABLE'),
-(12, 2, 1, '2026-08-16 15:45:00', 'IMAX 2D', 'FAST_FILLING'),
-(13, 2, 1, '2026-08-16 20:00:00', 'IMAX 2D', 'ALMOST_FULL'),
-(14, 2, 2, '2026-08-16 14:00:00', '2D Dolby Atmos', 'AVAILABLE'),
-(15, 2, 3, '2026-08-16 18:30:00', 'IMAX 2D', 'FAST_FILLING'),
+-- The Dark Knight (Movie 2) today
+(11, 2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '11:30:00'), 'IMAX 2D', 'AVAILABLE'),
+(12, 2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '15:45:00'), 'IMAX 2D', 'FAST_FILLING'),
+(13, 2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '20:00:00'), 'IMAX 2D', 'ALMOST_FULL'),
+(14, 2, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '14:00:00'), '2D Dolby Atmos', 'AVAILABLE'),
+(15, 2, 3, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '18:30:00'), 'IMAX 2D', 'FAST_FILLING'),
 
--- Inception (Movie 3) on 2026-08-16
-(16, 3, 1, '2026-08-16 10:00:00', 'IMAX 2D', 'AVAILABLE'),
-(17, 3, 1, '2026-08-16 14:30:00', 'IMAX 2D', 'AVAILABLE'),
-(18, 3, 2, '2026-08-16 19:15:00', '2D Dolby Atmos', 'FAST_FILLING'),
+-- Inception (Movie 3) today
+(16, 3, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '10:00:00'), 'IMAX 2D', 'AVAILABLE'),
+(17, 3, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '14:30:00'), 'IMAX 2D', 'AVAILABLE'),
+(18, 3, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '19:15:00'), '2D Dolby Atmos', 'FAST_FILLING'),
 
--- Avengers: Endgame (Movie 4) on 2026-08-16
-(19, 4, 1, '2026-08-16 09:00:00', 'IMAX 3D', 'FAST_FILLING'),
-(20, 4, 1, '2026-08-16 13:30:00', 'IMAX 3D', 'ALMOST_FULL'),
-(21, 4, 2, '2026-08-16 17:45:00', '3D Dolby Atmos', 'FAST_FILLING'),
+-- Avengers: Endgame (Movie 4) today
+(19, 4, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '09:00:00'), 'IMAX 3D', 'FAST_FILLING'),
+(20, 4, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '13:30:00'), 'IMAX 3D', 'ALMOST_FULL'),
+(21, 4, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '17:45:00'), '3D Dolby Atmos', 'FAST_FILLING'),
 
--- Dune: Part Two (Movie 5) on 2026-08-16
-(22, 5, 1, '2026-08-16 12:00:00', 'IMAX 2D', 'AVAILABLE'),
-(23, 5, 3, '2026-08-16 16:15:00', 'IMAX 2D', 'FAST_FILLING'),
+-- Dune: Part Two (Movie 5) today
+(22, 5, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '12:00:00'), 'IMAX 2D', 'AVAILABLE'),
+(23, 5, 3, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '16:15:00'), 'IMAX 2D', 'FAST_FILLING'),
 
--- Oppenheimer (Movie 6) on 2026-08-16
-(24, 6, 1, '2026-08-16 15:00:00', 'IMAX 70mm', 'ALMOST_FULL'),
-(25, 6, 2, '2026-08-16 20:30:00', '2D Dolby Atmos', 'AVAILABLE'),
+-- Oppenheimer (Movie 6) today
+(24, 6, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '15:00:00'), 'IMAX 70mm', 'ALMOST_FULL'),
+(25, 6, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '20:30:00'), '2D Dolby Atmos', 'AVAILABLE'),
 
--- TOMORROW: 2026-08-17 Showtimes for All Movies
-(26, 1, 1, '2026-08-17 11:00:00', 'IMAX 2D', 'AVAILABLE'),
-(27, 1, 1, '2026-08-17 16:00:00', 'IMAX 2D', 'FAST_FILLING'),
-(28, 2, 1, '2026-08-17 14:00:00', 'IMAX 2D', 'AVAILABLE'),
-(29, 2, 2, '2026-08-17 19:30:00', '2D Dolby Atmos', 'FAST_FILLING'),
-(30, 3, 2, '2026-08-17 17:00:00', '2D Dolby Atmos', 'AVAILABLE'),
-(31, 4, 1, '2026-08-17 20:30:00', 'IMAX 3D', 'ALMOST_FULL'),
-(32, 5, 3, '2026-08-17 15:30:00', 'IMAX 2D', 'AVAILABLE'),
-(33, 6, 1, '2026-08-17 12:30:00', 'IMAX 70mm', 'FAST_FILLING'),
+-- TOMORROW
+(26, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '11:00:00'), 'IMAX 2D', 'AVAILABLE'),
+(27, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '16:00:00'), 'IMAX 2D', 'FAST_FILLING'),
+(28, 2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '14:00:00'), 'IMAX 2D', 'AVAILABLE'),
+(29, 2, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '19:30:00'), '2D Dolby Atmos', 'FAST_FILLING'),
+(30, 3, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '17:00:00'), '2D Dolby Atmos', 'AVAILABLE'),
+(31, 4, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '20:30:00'), 'IMAX 3D', 'ALMOST_FULL'),
+(32, 5, 3, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '15:30:00'), 'IMAX 2D', 'AVAILABLE'),
+(33, 6, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '12:30:00'), 'IMAX 70mm', 'FAST_FILLING'),
 
--- 2026-08-18 Showtimes
-(34, 1, 1, '2026-08-18 10:30:00', 'IMAX 2D', 'AVAILABLE'),
-(35, 2, 1, '2026-08-18 14:15:00', 'IMAX 2D', 'AVAILABLE'),
-(36, 3, 1, '2026-08-18 18:00:00', 'IMAX 2D', 'FAST_FILLING'),
-(37, 4, 2, '2026-08-18 13:00:00', '3D Dolby Atmos', 'AVAILABLE'),
-(38, 5, 1, '2026-08-18 16:45:00', 'IMAX 2D', 'AVAILABLE'),
-(39, 6, 2, '2026-08-18 20:15:00', '2D Dolby Atmos', 'FAST_FILLING'),
+-- DAY AFTER TOMORROW
+(34, 1, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '10:30:00'), 'IMAX 2D', 'AVAILABLE'),
+(35, 2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '14:15:00'), 'IMAX 2D', 'AVAILABLE'),
+(36, 3, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '18:00:00'), 'IMAX 2D', 'FAST_FILLING'),
+(37, 4, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '13:00:00'), '3D Dolby Atmos', 'AVAILABLE'),
+(38, 5, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '16:45:00'), 'IMAX 2D', 'AVAILABLE'),
+(39, 6, 2, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 2 DAY), '20:15:00'), '2D Dolby Atmos', 'FAST_FILLING'),
 
 -- Other Cities (Delhi-NCR, Bengaluru, Hyderabad, NY, London)
-(40, 1, 6, '2026-08-16 13:00:00', 'VIP Luxe', 'AVAILABLE'),
-(41, 1, 6, '2026-08-16 18:30:00', 'VIP Luxe', 'FAST_FILLING'),
-(42, 2, 7, '2026-08-16 14:00:00', 'IMAX 2D', 'AVAILABLE'),
-(43, 2, 7, '2026-08-16 18:00:00', 'IMAX 2D', 'FAST_FILLING'),
-(44, 1, 8, '2026-08-16 11:30:00', 'IMAX 2D', 'AVAILABLE'),
-(45, 2, 8, '2026-08-16 16:00:00', 'IMAX 2D', 'FAST_FILLING'),
-(46, 1, 9, '2026-08-16 10:45:00', 'IMAX Large Format', 'FAST_FILLING'),
-(47, 3, 9, '2026-08-16 15:15:00', 'IMAX Large Format', 'ALMOST_FULL'),
-(48, 1, 10, '2026-08-16 12:00:00', 'Dolby Cinema', 'AVAILABLE'),
-(49, 2, 10, '2026-08-16 17:00:00', 'Dolby Cinema', 'FAST_FILLING'),
-(50, 1, 11, '2026-08-16 13:30:00', '70mm BFI IMAX', 'FAST_FILLING');
+(40, 1, 6, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '13:00:00'), 'VIP Luxe', 'AVAILABLE'),
+(41, 1, 6, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '18:30:00'), 'VIP Luxe', 'FAST_FILLING'),
+(42, 2, 7, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '14:00:00'), 'IMAX 2D', 'AVAILABLE'),
+(43, 2, 7, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '18:00:00'), 'IMAX 2D', 'FAST_FILLING'),
+(44, 1, 8, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '11:30:00'), 'IMAX 2D', 'AVAILABLE'),
+(45, 2, 8, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '16:00:00'), 'IMAX 2D', 'FAST_FILLING'),
+(46, 1, 9, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '10:45:00'), 'IMAX Large Format', 'FAST_FILLING'),
+(47, 3, 9, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '15:15:00'), 'IMAX Large Format', 'ALMOST_FULL'),
+(48, 1, 10, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '12:00:00'), 'Dolby Cinema', 'AVAILABLE'),
+(49, 2, 10, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '17:00:00'), 'Dolby Cinema', 'FAST_FILLING'),
+(50, 1, 11, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 0 DAY), '13:30:00'), '70mm BFI IMAX', 'FAST_FILLING');
 
 -- 6. Populate Initial Showtime Seats for showtimes 1 to 40
 INSERT INTO showtime_seats (showtime_id, seat_id, status)
@@ -354,16 +368,3 @@ WHERE showtime_id = 2 AND seat_id IN (
         SELECT s.id FROM seats s WHERE s.screen_id = 1 AND s.row_name IN ('A', 'C') AND s.seat_number IN (1, 2, 5, 6, 8, 9)
     ) tmp
 );
-
--- 7. Seed Sample Bookings
-INSERT INTO bookings (id, booking_code, user_name, user_email, user_phone, total_amount, convenience_fee, payment_method, booking_status) VALUES
-(1, 'BMS-789421', 'Aarav Sharma', 'aarav.sharma@example.com', '+91 9876543210', 1155.00, 35.00, 'UPI (Google Pay)', 'CONFIRMED'),
-(2, 'BMS-932104', 'Priya Patel', 'priya.patel@example.com', '+91 9823456789', 595.00, 35.00, 'Credit Card', 'CONFIRMED');
-
-INSERT INTO booking_items (booking_id, showtime_id, seat_id, price) VALUES
-(1, 1, (SELECT id FROM seats WHERE screen_id = 1 AND row_name = 'B' AND seat_number = 4), 280.00),
-(1, 1, (SELECT id FROM seats WHERE screen_id = 1 AND row_name = 'B' AND seat_number = 5), 280.00),
-(1, 1, (SELECT id FROM seats WHERE screen_id = 1 AND row_name = 'B' AND seat_number = 6), 280.00),
-(1, 1, (SELECT id FROM seats WHERE screen_id = 1 AND row_name = 'B' AND seat_number = 7), 280.00),
-(2, 2, (SELECT id FROM seats WHERE screen_id = 1 AND row_name = 'B' AND seat_number = 1), 280.00),
-(2, 2, (SELECT id FROM seats WHERE screen_id = 1 AND row_name = 'B' AND seat_number = 2), 280.00);

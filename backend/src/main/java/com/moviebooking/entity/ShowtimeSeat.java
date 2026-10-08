@@ -22,7 +22,7 @@ public class ShowtimeSeat {
 
     private String status; // AVAILABLE, LOCKED, BOOKED
     private LocalDateTime lockedUntil;
-    private String lockedBySession;
+    private Long lockedByUserId;
 
     public ShowtimeSeat() {}
 
@@ -41,6 +41,6 @@ public class ShowtimeSeat {
     public LocalDateTime getLockedUntil() { return lockedUntil; }
     public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
 
-    public String getLockedBySession() { return lockedBySession; }
-    public void setLockedBySession(String lockedBySession) { this.lockedBySession = lockedBySession; }
+    public Long getLockedByUserId() { return lockedByUserId; }
+    public void setLockedByUserId(Long lockedByUserId) { this.lockedByUserId = lockedByUserId; }
 }

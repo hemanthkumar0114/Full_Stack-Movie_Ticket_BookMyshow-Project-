@@ -2,33 +2,31 @@ package com.moviebooking.controller;
 
 import com.moviebooking.dto.CinemaShowtimeDTO;
 import com.moviebooking.service.CinemaScheduleService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@CrossOrigin(origins = "*")
+@RequestMapping("/api/v1/cinemas")
 public class CinemaController {
 
-    @Autowired
-    private CinemaScheduleService cinemaScheduleService;
+    private final CinemaScheduleService cinemaScheduleService;
 
-    @GetMapping("/api/v1/cinemas")
-    public ResponseEntity<List<CinemaShowtimeDTO>> getCinemas(
-            @RequestParam Long movieId,
-            @RequestParam(required = false, defaultValue = "Mumbai") String city,
-            @RequestParam(required = false) String date) {
-        return ResponseEntity.ok(cinemaScheduleService.getCinemasWithShowtimes(movieId, city, date));
+    public CinemaController(CinemaScheduleService cinemaScheduleService) {
+        this.cinemaScheduleService = cinemaScheduleService;
     }
 
-    // Compatibility endpoint
-    @GetMapping("/api/movies/{movieId}/showtimes")
-    public ResponseEntity<List<CinemaShowtimeDTO>> getShowtimesForMovie(
-            @PathVariable Long movieId,
-            @RequestParam(required = false, defaultValue = "Mumbai") String city,
-            @RequestParam(required = false) String date) {
+    @GetMapping
+    public ResponseEntity<List<CinemaShowtimeDTO>> getCinemas(
+            @RequestParam Long movieId,
+            @RequestParam(defaultValue = "Mumbai") String city,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(cinemaScheduleService.getCinemasWithShowtimes(movieId, city, date));
     }
 }

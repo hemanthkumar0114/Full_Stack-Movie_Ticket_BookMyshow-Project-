@@ -16,6 +16,10 @@ public class Booking {
     @Column(unique = true, nullable = false)
     private String bookingCode;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
     private String userName;
     private String userEmail;
     private String userPhone;
@@ -23,18 +27,26 @@ public class Booking {
     private BigDecimal convenienceFee;
     private String paymentMethod;
     private String bookingStatus;
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<BookingItem> items = new ArrayList<>();
 
     public Booking() {}
 
+    public void addItem(BookingItem item) {
+        items.add(item);
+        item.setBooking(this);
+    }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
     public String getBookingCode() { return bookingCode; }
     public void setBookingCode(String bookingCode) { this.bookingCode = bookingCode; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
     public String getUserName() { return userName; }
     public void setUserName(String userName) { this.userName = userName; }
